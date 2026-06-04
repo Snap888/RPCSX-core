@@ -4,6 +4,7 @@
 #include "signaling_handler.h"
 #include "Emu/IdManager.h"
 #include "rpcsx/fw/ps3/cellSysutil.h"
+#include "np_handler.h"
 #include "Emu/NP/vport0.h"
 #include "Emu/NP/np_helpers.h"
 
