@@ -3515,13 +3515,22 @@ public:
 		}
 		case SPU_RdDec:
 		{
-#if defined(ARCH_X64)
+#if defined(ARCH_X64) || defined(ARCH_ARM64)
 			if (utils::get_tsc_freq() && !(g_cfg.core.spu_loop_detection) && (g_cfg.core.clocks_scale == 100))
 			{
 				const auto timebase_offs = m_ir->CreateLoad(get_type<u64>(), m_ir->CreateIntToPtr(m_ir->getInt64(reinterpret_cast<u64>(&g_timebase_offs)), get_type<u64*>()));
 				const auto timestamp = m_ir->CreateLoad(get_type<u64>(), spu_ptr<u64>(OFFSET_OF(spu_thread, ch_dec_start_timestamp)));
 				const auto dec_value = m_ir->CreateLoad(get_type<u32>(), spu_ptr<u32>(OFFSET_OF(spu_thread, ch_dec_value)));
+#if defined(ARCH_X64)
 				const auto tsc = m_ir->CreateCall(get_intrinsic(llvm::Intrinsic::x86_rdtsc));
+#else
+				// CNTVCT_EL0 is the architectural virtual counter; its frequency is
+				// CNTFRQ_EL0 == get_tsc_freq(), so the same math applies. Unlike
+				// llvm.readcyclecounter (-> PMCCNTR_EL0) it never traps in userspace.
+				const auto cntvct_type = llvm::FunctionType::get(get_type<u64>(), false);
+				const auto cntvct_asm = llvm::InlineAsm::get(cntvct_type, "mrs $0, cntvct_el0", "=r", true);
+				const auto tsc = m_ir->CreateCall(cntvct_type, cntvct_asm);
+#endif
 				const auto tscx = m_ir->CreateMul(m_ir->CreateUDiv(tsc, m_ir->getInt64(utils::get_tsc_freq())), m_ir->getInt64(80000000));
 				const auto tscm = m_ir->CreateUDiv(m_ir->CreateMul(m_ir->CreateURem(tsc, m_ir->getInt64(utils::get_tsc_freq())), m_ir->getInt64(80000000)), m_ir->getInt64(utils::get_tsc_freq()));
 				const auto tsctb = m_ir->CreateSub(m_ir->CreateAdd(tscx, tscm), timebase_offs);
@@ -4337,11 +4346,17 @@ public:
 		{
 			call("spu_get_events", &exec_get_events, m_thread, m_ir->getInt32(SPU_EVENT_TM));
 
-#if defined(ARCH_X64)
+#if defined(ARCH_X64) || defined(ARCH_ARM64)
 			if (utils::get_tsc_freq() && !(g_cfg.core.spu_loop_detection) && (g_cfg.core.clocks_scale == 100))
 			{
 				const auto timebase_offs = m_ir->CreateLoad(get_type<u64>(), m_ir->CreateIntToPtr(m_ir->getInt64(reinterpret_cast<u64>(&g_timebase_offs)), get_type<u64*>()));
+#if defined(ARCH_X64)
 				const auto tsc = m_ir->CreateCall(get_intrinsic(llvm::Intrinsic::x86_rdtsc));
+#else
+				const auto cntvct_type = llvm::FunctionType::get(get_type<u64>(), false);
+				const auto cntvct_asm = llvm::InlineAsm::get(cntvct_type, "mrs $0, cntvct_el0", "=r", true);
+				const auto tsc = m_ir->CreateCall(cntvct_type, cntvct_asm);
+#endif
 				const auto tscx = m_ir->CreateMul(m_ir->CreateUDiv(tsc, m_ir->getInt64(utils::get_tsc_freq())), m_ir->getInt64(80000000));
 				const auto tscm = m_ir->CreateUDiv(m_ir->CreateMul(m_ir->CreateURem(tsc, m_ir->getInt64(utils::get_tsc_freq())), m_ir->getInt64(80000000)), m_ir->getInt64(utils::get_tsc_freq()));
 				const auto tsctb = m_ir->CreateSub(m_ir->CreateAdd(tscx, tscm), timebase_offs);
