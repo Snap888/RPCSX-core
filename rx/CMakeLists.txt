@@ -34,6 +34,16 @@ endif()
 target_link_libraries(${PROJECT_NAME} PUBLIC fmt::fmt)
 
 if (Git_FOUND)
+    # Re-run configuration whenever HEAD moves (commit/checkout/reset), so an
+    # incremental `cmake --build` always re-embeds the current commit hash in the
+    # version below instead of keeping the value frozen at first configure.
+    execute_process(COMMAND ${GIT_EXECUTABLE} rev-parse --absolute-git-dir
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        OUTPUT_VARIABLE RX_GIT_DIR OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+    if (RX_GIT_DIR AND EXISTS "${RX_GIT_DIR}/logs/HEAD")
+        set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${RX_GIT_DIR}/logs/HEAD")
+    endif()
+
     execute_process(COMMAND ${GIT_EXECUTABLE} log --date=format:%Y%m%d --pretty=format:'%cd' -n 1 WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" OUTPUT_VARIABLE GIT_DATE)
 
     execute_process(COMMAND ${GIT_EXECUTABLE} log --pretty=format:'%h' -n 1
