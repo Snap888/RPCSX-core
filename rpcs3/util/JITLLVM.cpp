@@ -688,6 +688,17 @@ jit_compiler::jit_compiler(const std::unordered_map<std::string, u64>& _link, co
 	}
 
 	{
+		std::vector<std::string> attrs;
+#ifdef ARCH_ARM64
+		// Advertise hardware features we emit intrinsics for, so LLVM's
+		// instruction selector can actually lower them. Without this, an
+		// emitted UDOT would fail with "Cannot select: AArch64ISD::UDOT".
+		// Guarded by runtime detection (must match what the recompilers emit).
+		if (utils::has_dotprod())
+		{
+			attrs.push_back("+dotprod");
+		}
+#endif
 
 		m_engine = std::unique_ptr<llvm::ExecutionEngine, void (*)(llvm::ExecutionEngine*)>{
 			llvm::EngineBuilder(std::move(null_mod))
@@ -700,6 +711,7 @@ jit_compiler::jit_compiler(const std::unordered_map<std::string, u64>& _link, co
 		//.setCodeModel(llvm::CodeModel::Large)
 #endif
 				.setRelocationModel(llvm::Reloc::Model::PIC_)
+				.setMAttrs(attrs)
 				.setMCPU(m_cpu)
 				.create(),
 			[](llvm::ExecutionEngine* engine)
