@@ -67,6 +67,39 @@ const bool jit_initialize = []() -> bool
 	fmt::throw_exception("Null function: %s", name);
 }
 
+namespace
+{
+	// Set during run_recoverable_llvm so the LLVM fatal handler can report back.
+	thread_local std::string* g_llvm_fatal_message = nullptr;
+
+	// Run LLVM codegen in a disposable worker thread. If LLVM invokes its fatal
+	// error handler, the handler stores the message and silently exits this
+	// thread (instead of aborting the process), letting the caller recover and
+	// retry (e.g. SPU compilation without TBL2/TBX2).
+	template <typename F>
+	bool run_recoverable_llvm(F&& func, std::string& error)
+	{
+		error.clear();
+
+		named_thread worker("LLVM JIT", [&]()
+		{
+			g_llvm_fatal_message = &error;
+			std::forward<F>(func)();
+			g_llvm_fatal_message = nullptr;
+		});
+
+		worker();
+		const bool result = static_cast<thread_state>(worker) == thread_state::finished;
+
+		if (!result && error.empty())
+		{
+			error = "LLVM crash recovery invoked";
+		}
+
+		return result;
+	}
+}
+
 namespace vm
 {
 	extern u8* const g_sudo_addr;
@@ -655,6 +688,13 @@ jit_compiler::jit_compiler(const std::unordered_map<std::string, u64>& _link, co
 		llvm::install_fatal_error_handler([](void*, const char* msg, bool)
 			{
 				const std::string_view out = msg ? msg : "";
+
+				if (g_llvm_fatal_message)
+				{
+					*g_llvm_fatal_message = out;
+					thread_ctrl::silent_exit();
+				}
+
 				fmt::throw_exception("LLVM Emergency Exit Invoked: '%s'", out);
 			},
 			nullptr);
@@ -846,6 +886,61 @@ void jit_compiler::update_global_mapping(const std::string& name, u64 addr)
 void jit_compiler::fin()
 {
 	m_engine->finalizeObject();
+}
+
+bool jit_compiler::try_add(std::unique_ptr<llvm::Module> _module, const std::string& path, std::string& error)
+{
+	ObjectCache cache{path, this};
+	m_engine->setObjectCache(&cache);
+
+	const auto ptr = _module.get();
+	m_engine->addModule(std::move(_module));
+
+	if (!run_recoverable_llvm([&]()
+	{
+		m_engine->generateCodeForModule(ptr);
+	}, error))
+	{
+		return false;
+	}
+
+	m_engine->setObjectCache(nullptr);
+
+	for (auto& func : ptr->functions())
+	{
+		func.deleteBody();
+	}
+
+	return true;
+}
+
+bool jit_compiler::try_add(std::unique_ptr<llvm::Module> _module, std::string& error)
+{
+	const auto ptr = _module.get();
+	m_engine->addModule(std::move(_module));
+
+	if (!run_recoverable_llvm([&]()
+	{
+		m_engine->generateCodeForModule(ptr);
+	}, error))
+	{
+		return false;
+	}
+
+	for (auto& func : ptr->functions())
+	{
+		func.deleteBody();
+	}
+
+	return true;
+}
+
+bool jit_compiler::try_fin(std::string& error)
+{
+	return run_recoverable_llvm([&]()
+	{
+		m_engine->finalizeObject();
+	}, error);
 }
 
 u64 jit_compiler::get(const std::string& name)

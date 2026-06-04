@@ -554,6 +554,12 @@ public:
 	// Finalize
 	void fin();
 
+	// Error-tolerant variants: return false after an LLVM fatal-error recovery
+	// (the compiler must then be discarded). Used by the SPU TBL2 retry path.
+	bool try_add(std::unique_ptr<llvm::Module> _module, const std::string& path, std::string& error);
+	bool try_add(std::unique_ptr<llvm::Module> _module, std::string& error);
+	bool try_fin(std::string& error);
+
 	// Get compiled function address
 	u64 get(const std::string& name);
 

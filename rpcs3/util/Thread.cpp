@@ -2749,6 +2749,35 @@ void thread_base::exec()
 	}
 }
 
+[[noreturn]] void thread_ctrl::silent_exit() noexcept
+{
+	if (const auto _this = g_tls_this_thread)
+	{
+		if (g_tls_error_callback)
+		{
+			g_tls_error_callback();
+		}
+
+		const u64 _self = _this->finalize(thread_state::errored);
+
+		if (_self == umax)
+		{
+			// Unused, detached thread support remnant
+			delete _this;
+		}
+
+		thread_base::finalize(umax);
+	}
+
+#ifdef _WIN32
+	_endthreadex(0);
+#else
+	pthread_exit(nullptr);
+#endif
+
+	std::abort();
+}
+
 [[noreturn]] void thread_ctrl::emergency_exit(std::string_view reason)
 {
 	if (const std::string info = dump_useful_thread_info(); !info.empty())

@@ -325,6 +325,9 @@ public:
 	// Exit.
 	[[noreturn]] static void emergency_exit(std::string_view reason);
 
+	// Quietly terminate the current thread (errored state, no fatal log). Used by JIT LLVM crash recovery.
+	[[noreturn]] static void silent_exit() noexcept;
+
 	// Get current thread (may be nullptr)
 	static thread_base* get_current()
 	{
