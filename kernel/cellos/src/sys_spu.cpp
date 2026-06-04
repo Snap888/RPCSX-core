@@ -158,22 +158,48 @@ void sys_spu_image::deploy(u8 *loc, std::span<const sys_spu_segment> segs,
     sha1_update(&sha, reinterpret_cast<const uchar *>(&seg.type),
                 sizeof(seg.type));
 
+    // Clamp to local store bounds to prevent a malformed image from writing
+    // past the 256 KB buffer into host memory
+    const u32 masked_ls = seg.ls % SPU_LS_SIZE;
+    u32 masked_size = std::min<u32>(SPU_LS_SIZE - masked_ls, seg.size % SPU_LS_SIZE);
+
     // Hash big-endian values
     if (seg.type == SYS_SPU_SEGMENT_TYPE_COPY) {
-      std::memcpy(loc + seg.ls, vm::base(seg.addr), seg.size);
+      if (!vm::check_addr(seg.addr, 0, seg.size)) {
+        // Further clamp size to fit the 4GB address space, preventing segfault
+        masked_size = masked_size ? std::min<u32>(u32{umax} - seg.addr, masked_size - 1) + 1 : 0;
+        spu_log.error("Dumping sys_spu_image log - illegal address:\n\n%s", dump);
+      }
+
+      if ((seg.ls | seg.size) % 4) {
+        spu_log.error("Unaligned SPU COPY type segment (ls=0x%x, size=0x%x)",
+                      seg.ls, seg.size);
+      }
+
+      if (masked_ls != seg.ls || masked_size != seg.size) {
+        spu_log.error("Illegal SPU COPY type segment (ls=0x%x, size=0x%x)",
+                      seg.ls, seg.size);
+      }
+
+      std::memcpy(loc + masked_ls, vm::base(seg.addr), masked_size);
       sha1_update(&sha, reinterpret_cast<const uchar *>(&seg.size),
                   sizeof(seg.size));
       sha1_update(&sha, reinterpret_cast<const uchar *>(&seg.ls),
                   sizeof(seg.ls));
-      sha1_update(&sha, vm::_ptr<uchar>(seg.addr), seg.size);
+      sha1_update(&sha, loc + masked_ls, masked_size);
     } else if (seg.type == SYS_SPU_SEGMENT_TYPE_FILL) {
       if ((seg.ls | seg.size) % 4) {
         spu_log.error("Unaligned SPU FILL type segment (ls=0x%x, size=0x%x)",
                       seg.ls, seg.size);
       }
 
-      std::fill_n(reinterpret_cast<be_t<u32> *>(loc + seg.ls), seg.size / 4,
-                  seg.addr);
+      if (masked_ls != seg.ls || masked_size != seg.size) {
+        spu_log.error("Illegal SPU FILL type segment (ls=0x%x, size=0x%x)",
+                      seg.ls, seg.size);
+      }
+
+      std::fill_n(reinterpret_cast<be_t<u32> *>(loc + masked_ls),
+                  masked_size / 4, seg.addr);
       sha1_update(&sha, reinterpret_cast<const uchar *>(&seg.size),
                   sizeof(seg.size));
       sha1_update(&sha, reinterpret_cast<const uchar *>(&seg.ls),
