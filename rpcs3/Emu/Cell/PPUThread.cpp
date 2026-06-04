@@ -5842,7 +5842,6 @@ static void ppu_initialize2(jit_compiler& jit, const ppu_module<lv2_obj>& module
 		{
 			translator.build_interpreter();
 		}
-#ifdef ARCH_X64
 		// Create the analysis managers.
 		// These must be declared in this order so that they are destroyed in the
 		// correct order due to inter-analysis-manager references.
@@ -5867,7 +5866,6 @@ static void ppu_initialize2(jit_compiler& jit, const ppu_module<lv2_obj>& module
 		FunctionPassManager fpm;
 		// Basic optimizations
 		fpm.addPass(EarlyCSEPass());
-#endif
 		u32 guest_code_size = 0;
 		u32 min_addr = umax;
 		u32 max_addr = 0;
@@ -5893,10 +5891,8 @@ static void ppu_initialize2(jit_compiler& jit, const ppu_module<lv2_obj>& module
 				// Translate
 				if ([[maybe_unused]] const auto func = translator.Translate(mod_func))
 				{
-#ifdef ARCH_X64 // TODO
                 // Run optimization passes
 					fpm.run(*func, fam);
-#endif // ARCH_X64
 				}
 				else
 				{
@@ -5911,10 +5907,8 @@ static void ppu_initialize2(jit_compiler& jit, const ppu_module<lv2_obj>& module
 		{
 			if ([[maybe_unused]] const auto func = translator.GetSymbolResolver(module_part))
 			{
-#ifdef ARCH_X64 // TODO
                 // Run optimization passes
 				fpm.run(*func, fam);
-#endif // ARCH_X64
 			}
 			else
 			{
