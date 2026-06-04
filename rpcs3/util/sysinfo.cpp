@@ -459,6 +459,45 @@ bool utils::has_dotprod()
 	}();
 	return g_value;
 }
+
+bool utils::has_sha3()
+{
+	static const bool g_value = []() -> bool
+	{
+#if defined(__linux__)
+		return (getauxval(AT_HWCAP) & HWCAP_SHA3) != 0;
+#else
+		return false;
+#endif
+	}();
+	return g_value;
+}
+
+bool utils::has_sve()
+{
+	static const bool g_value = []() -> bool
+	{
+#if defined(__linux__)
+		return (getauxval(AT_HWCAP) & HWCAP_SVE) != 0;
+#else
+		return false;
+#endif
+	}();
+	return g_value;
+}
+
+bool utils::has_sve2()
+{
+	static const bool g_value = []() -> bool
+	{
+#if defined(__linux__) && defined(HWCAP2_SVE2)
+		return (getauxval(AT_HWCAP2) & HWCAP2_SVE2) != 0;
+#else
+		return false;
+#endif
+	}();
+	return g_value;
+}
 #endif
 
 std::string utils::get_cpu_brand()

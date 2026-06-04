@@ -56,8 +56,12 @@ namespace utils
 	bool has_um_wait();
 
 #ifdef ARCH_ARM64
+	// Runtime detection of optional AArch64 features (via HWCAP).
 	// True if the CPU supports the ARMv8.2 dot product instructions (UDOT/SDOT)
 	bool has_dotprod();
+	bool has_sha3();
+	bool has_sve();
+	bool has_sve2();
 #endif
 
 	std::string get_cpu_brand();

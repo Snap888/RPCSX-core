@@ -690,14 +690,15 @@ jit_compiler::jit_compiler(const std::unordered_map<std::string, u64>& _link, co
 	{
 		std::vector<std::string> attrs;
 #ifdef ARCH_ARM64
-		// Advertise hardware features we emit intrinsics for, so LLVM's
-		// instruction selector can actually lower them. Without this, an
-		// emitted UDOT would fail with "Cannot select: AArch64ISD::UDOT".
-		// Guarded by runtime detection (must match what the recompilers emit).
-		if (utils::has_dotprod())
-		{
-			attrs.push_back("+dotprod");
-		}
+		// Pin LLVM's AArch64 feature set to what the CPU actually supports at
+		// runtime (HWCAP), rather than what it infers from the CPU model.
+		// - +dotprod lets it select the UDOT we emit (else "Cannot select").
+		// - -sve/-sve2 stop it auto-emitting SVE that crashes on big.LITTLE
+		//   parts where the model claims SVE but it isn't usable on all cores.
+		attrs.push_back(utils::has_sha3()    ? "+sha3"    : "-sha3");
+		attrs.push_back(utils::has_dotprod() ? "+dotprod" : "-dotprod");
+		attrs.push_back(utils::has_sve()     ? "+sve"     : "-sve");
+		attrs.push_back(utils::has_sve2()    ? "+sve2"    : "-sve2");
 #endif
 
 		m_engine = std::unique_ptr<llvm::ExecutionEngine, void (*)(llvm::ExecutionEngine*)>{
