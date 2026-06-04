@@ -923,6 +923,11 @@ extern void ppu_register_function_at(u32 addr, u32 size, ppu_intrp_func_t ptr = 
 		return;
 	}
 
+	// Align to instruction boundaries so unaligned writes (e.g. via
+	// sys_dbg_write_process_memory) don't corrupt the interpreter cache
+	size = rx::alignUp<u32>(size + addr % 4, 4);
+	addr &= -4;
+
 	if (g_cfg.core.ppu_decoder != ppu_decoder_type::_static)
 	{
 		return;
