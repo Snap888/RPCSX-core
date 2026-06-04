@@ -157,7 +157,7 @@ public:
     return result;
   }
 
-  [[nodiscard]] constexpr static StaticCString vformat(std::string_view fmt,
+  [[nodiscard]] static StaticCString vformat(std::string_view fmt,
                                                        format_args args) {
     StaticCString result;
     auto [ptr, size] =
@@ -173,7 +173,7 @@ public:
     m_data[std::min<std::size_t>(size, capacity)] = '\0';
   }
 
-  constexpr void assignVFormat(std::string_view fmt, format_args args) {
+  void assignVFormat(std::string_view fmt, format_args args) {
     auto [ptr, size] = vformat_to(m_data, capacity, fmt, std::move(args));
     m_data[std::min<std::size_t>(size, capacity)] = '\0';
   }
@@ -325,7 +325,7 @@ public:
     return result;
   }
 
-  [[nodiscard]] constexpr static StaticString vformat(std::string_view fmt,
+  [[nodiscard]] static StaticString vformat(std::string_view fmt,
                                                       format_args args) {
     StaticString result;
     auto [ptr, size] =
@@ -341,7 +341,7 @@ public:
     m_size = std::min<std::size_t>(size, capacity);
   }
 
-  constexpr void assignVFormat(std::string_view fmt, format_args args) {
+  void assignVFormat(std::string_view fmt, format_args args) {
     auto [ptr, size] = vformat_to(m_data, capacity, fmt, std::move(args));
     m_size = std::min<std::size_t>(size, capacity);
   }
