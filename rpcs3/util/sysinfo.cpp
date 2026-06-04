@@ -19,6 +19,10 @@
 #ifndef __APPLE__
 #include <sys/utsname.h>
 #include <cerrno>
+#if defined(ARCH_ARM64) && defined(__linux__)
+#include <sys/auxv.h>
+#include <asm/hwcap.h>
+#endif
 #endif
 #endif
 
@@ -441,6 +445,21 @@ u32 utils::get_rep_movsb_threshold()
 
 	return g_value;
 }
+
+#ifdef ARCH_ARM64
+bool utils::has_dotprod()
+{
+	static const bool g_value = []() -> bool
+	{
+#if defined(__linux__)
+		return (getauxval(AT_HWCAP) & HWCAP_ASIMDDP) != 0;
+#else
+		return false;
+#endif
+	}();
+	return g_value;
+}
+#endif
 
 std::string utils::get_cpu_brand()
 {

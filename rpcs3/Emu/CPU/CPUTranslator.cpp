@@ -4,6 +4,7 @@
 
 #include "util/v128.hpp"
 #include "util/logs.hpp"
+#include "util/sysinfo.hpp"
 
 LOG_CHANNEL(llvm_log, "LLVM");
 
@@ -195,6 +196,13 @@ void cpu_translator::initialize(llvm::LLVMContext& context, llvm::ExecutionEngin
 		// AVX does not use intrinsics so far
 		m_use_avx = true;
 	}
+
+#ifdef ARCH_ARM64
+	if (utils::has_dotprod())
+	{
+		m_use_dotprod = true;
+	}
+#endif
 }
 
 llvm::Value* cpu_translator::bitcast(llvm::Value* val, llvm::Type* type) const

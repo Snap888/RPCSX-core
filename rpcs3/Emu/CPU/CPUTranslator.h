@@ -3091,6 +3091,9 @@ protected:
 	// Allow Icelake tier AVX-512
 	bool m_use_avx512_icl = false;
 
+	// Allow ARMv8.2 dot product instructions (UDOT/SDOT)
+	bool m_use_dotprod = false;
+
 	// IR builder
 	llvm::IRBuilder<>* m_ir = nullptr;
 
@@ -3625,6 +3628,20 @@ public:
 		const auto data1 = b.eval(m_ir);
 
 		result.value = m_ir->CreateCall(get_intrinsic<u32[4]>(llvm::Intrinsic::aarch64_neon_umull), {data0, data1});
+		return result;
+	}
+
+	// ARMv8.2 UDOT: c += dot product of u8 lanes of a and b, accumulated per u32 lane
+	template <typename T1, typename T2, typename T3>
+	value_t<u32[4]> udot(T1 a, T2 b, T3 c)
+	{
+		value_t<u32[4]> result;
+
+		const auto data0 = a.eval(m_ir);
+		const auto data1 = b.eval(m_ir);
+		const auto data2 = c.eval(m_ir);
+
+		result.value = m_ir->CreateCall(get_intrinsic<u32[4], u8[16]>(llvm::Intrinsic::aarch64_neon_udot), {data0, data1, data2});
 		return result;
 	}
 

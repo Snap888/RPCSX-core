@@ -5258,6 +5258,19 @@ public:
 			return;
 		}
 
+#ifdef ARCH_ARM64
+		if (m_use_dotprod)
+		{
+			const auto [a, b] = get_vrs<u8[16]>(op.ra, op.rb);
+			const auto zeroes = splat<u32[4]>(0);
+			const auto ones = splat<u8[16]>(0x01);
+			const auto ax = bitcast<u16[8]>(udot(zeroes, a, ones));
+			const auto bx = bitcast<u16[8]>(udot(zeroes, b, ones));
+			set_vr(op.rt, shuffle2(ax, bx, 0, 8, 2, 10, 4, 12, 6, 14));
+			return;
+		}
+#endif
+
 		if (m_use_vnni)
 		{
 			const auto [a, b] = get_vrs<u32[4]>(op.ra, op.rb);

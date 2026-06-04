@@ -55,6 +55,11 @@ namespace utils
 
 	bool has_um_wait();
 
+#ifdef ARCH_ARM64
+	// True if the CPU supports the ARMv8.2 dot product instructions (UDOT/SDOT)
+	bool has_dotprod();
+#endif
+
 	std::string get_cpu_brand();
 
 	std::string get_system_info();
