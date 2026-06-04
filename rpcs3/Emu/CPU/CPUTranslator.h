@@ -3722,7 +3722,14 @@ public:
 			}
 		}
 
-		result.value = m_ir->CreateCall(get_intrinsic<u8[16]>(llvm::Intrinsic::aarch64_neon_tbl2), { data0, data1, index });
+		// Avoid the TBL2 intrinsic: LLVM's AArch64 register scavenger can fail to
+		// compile some SPU programs when TBL2/TBX2 are used. Emulate the 2-table
+		// lookup with two TBL1s instead (out-of-range indices yield 0, so OR-combine).
+		const auto data0_lookup = m_ir->CreateCall(get_intrinsic<u8[16]>(llvm::Intrinsic::aarch64_neon_tbl1), { data0, index });
+		const auto data1_index = m_ir->CreateSub(index, llvm::ConstantInt::get(get_type<u8[16]>(), 16));
+		const auto data1_lookup = m_ir->CreateCall(get_intrinsic<u8[16]>(llvm::Intrinsic::aarch64_neon_tbl1), { data1, data1_index });
+
+		result.value = m_ir->CreateOr(data0_lookup, data1_lookup);
 		return result;
 	}
 
@@ -3747,7 +3754,11 @@ public:
 		const auto data1 = b.eval(m_ir);
 		const auto index = indices.eval(m_ir);
 
-		result.value = m_ir->CreateCall(get_intrinsic<u8[16]>(llvm::Intrinsic::aarch64_neon_tbx2), { v_fallback, data0, data1, index });
+		// Avoid TBX2 (same scavenger issue as TBL2): chain two TBX1s.
+		const auto first_lookup = m_ir->CreateCall(get_intrinsic<u8[16]>(llvm::Intrinsic::aarch64_neon_tbx1), { v_fallback, data0, index });
+		const auto data1_index = m_ir->CreateSub(index, llvm::ConstantInt::get(get_type<u8[16]>(), 16));
+
+		result.value = m_ir->CreateCall(get_intrinsic<u8[16]>(llvm::Intrinsic::aarch64_neon_tbx1), { first_lookup, data1, data1_index });
 		return result;
 	}
 #endif
