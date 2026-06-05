@@ -4,7 +4,7 @@ All changes are on top of upstream `RPCSX/rpcsx` (dev). Every port lists the ups
 RPCS3 commit it derives from and the original author. ARM-specific changes are guarded
 by `ARCH_ARM64`, so x86 builds are unaffected. Developed with AI assistance (Claude).
 
-## v1.1.0 — build `v20260605-cf7d050`
+## v1.1.0 — build `v20260605-cdd53aa`
 
 ### Major — SPU recompiler re-vendored to upstream RPCS3
 - **SPU LLVM Reduced Loop** — upstream's loop-detection pass; tighter, reduced-iteration codegen for hot SPU spin/wait loops. *(upstream a863e94c2 chain, Malcolm/Whatcookie)*
@@ -21,6 +21,7 @@ by `ARCH_ARM64`, so x86 builds are unaffected. Developed with AI assistance (Cla
 - **cpu_thread abnormal-termination UAF** — the "terminated abnormally" warning was logged from the dying thread's torn-down TLS; now logged from a fresh thread. *(a1a140db9, Elad)*
 - **`tar_object::save_directory` slicing** — `fs::dir_entry`→`fs::stat_t` slicing dropped saved-directory entry names (savestate/firmware). *(8c82ce8be, Megamouse)*
 - **sys_fs dev_flash device-alias** — the `CELL_FS_IOS:` alias check looked for `BUILTIN_FLASH` on dev_flash2, but mounts are `BUILTIN_FLSH1/2/3`, so flash alias lookups never matched. *(9e0824112)*
+- **Android VRAM headroom** — the Vulkan cache budget (`device_local_total_bytes`) could grow into the whole shared-memory "device local" heap (system RAM), starving the emulator/OS and causing OOM / unmapped-memory access-violation crashes in long open-world sessions (e.g. inFamous after a few minutes). Now clamped to 2/3 of detected memory on ARM unless the user sets a stricter VRAM limit. x86 (dedicated VRAM) is unaffected. *(ours)*
 
 ### Build
 - **Embedded version no longer goes stale** — `v<date>-<hash>` is regenerated when HEAD moves instead of being frozen at first cmake configure.
