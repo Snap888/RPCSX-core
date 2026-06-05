@@ -313,8 +313,14 @@ lv2_fs_mount_point *lv2_fs_object::get_mp(std::string_view filename,
             mp_name == "CELL_FS_IOS:PATA0_HDD_DRIVE"sv) ||
            (mp == &g_mp_sys_dev_hdd1 &&
             mp_name == "CELL_FS_IOS:PATA1_HDD_DRIVE"sv) ||
+           (mp == &g_mp_sys_dev_flash &&
+            mp_name == "CELL_FS_IOS:BUILTIN_FLASH"sv) ||
+           (mp == &g_mp_sys_dev_flash &&
+            mp_name == "CELL_FS_IOS:BUILTIN_FLSH1"sv) ||
            (mp == &g_mp_sys_dev_flash2 &&
-            mp_name == "CELL_FS_IOS:BUILTIN_FLASH"sv)); // TODO confirm
+            mp_name == "CELL_FS_IOS:BUILTIN_FLSH2"sv) ||
+           (mp == &g_mp_sys_dev_flash3 &&
+            mp_name == "CELL_FS_IOS:BUILTIN_FLSH3"sv)); // TODO confirm
 
       if (mp == &g_mp_sys_dev_usb) {
         if (mp_name.starts_with(is_path ? mp->root : mp->device)) {
