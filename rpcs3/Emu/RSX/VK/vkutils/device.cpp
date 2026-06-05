@@ -850,7 +850,22 @@ namespace vk
 		}
 
 		// Useful for debugging different VRAM configurations
-		const u64 vram_allocation_limit = g_cfg.video.vk.vram_allocation_limit * 0x100000ull;
+		u64 vram_allocation_limit = g_cfg.video.vk.vram_allocation_limit * 0x100000ull;
+#ifdef ARCH_ARM64
+		// On Android (and other shared-memory ARM SoCs) the "device local" heap is
+		// system RAM. The default VRAM limit is far larger than any phone, so the
+		// texture/surface caches are free to grow into all of it, starving the rest
+		// of the emulator and the OS -> OOM and unmapped-memory crashes in long
+		// open-world sessions. Reserve headroom by capping the cache budget to a
+		// fraction of the detected memory, unless the user set a stricter limit.
+		const u64 shared_mem_safe_budget = (memory_map.device_local_total_bytes / 3) * 2; // ~66%
+		vram_allocation_limit = std::min(vram_allocation_limit, shared_mem_safe_budget);
+		if (vram_allocation_limit < memory_map.device_local_total_bytes)
+		{
+			rsx_log.notice("Capping device-local cache budget to %llu MB (of %llu MB detected) to leave headroom on shared memory",
+				vram_allocation_limit / 0x100000, memory_map.device_local_total_bytes / 0x100000);
+		}
+#endif
 		memory_map.device_local_total_bytes = std::min(memory_map.device_local_total_bytes, vram_allocation_limit);
 	}
 
