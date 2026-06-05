@@ -209,6 +209,17 @@ namespace rsx
 		const u32 count = draw_indexed_clause.get_elements_count();
 
 		const auto ptr = vm::_ptr<const std::byte>(address);
+
+		// Defensive: a desynced FIFO can execute stale draws with a garbage index
+		// offset/count. Validate the index region is mapped instead of reading past
+		// it (which faults the RSX thread); return an empty array on failure.
+		if (!address || !vm::check_addr(address + first * type_size, vm::page_readable, count * type_size)) [[unlikely]]
+		{
+			rsx_log.error("Skipped out-of-bounds index array (addr=0x%x, first=%u, count=%u, type_size=%u)",
+				address, first, count, type_size);
+			return {};
+		}
+
 		return {ptr + first * type_size, count * type_size};
 	}
 
