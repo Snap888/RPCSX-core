@@ -4,6 +4,29 @@ All changes are on top of upstream `RPCSX/rpcsx` (dev). Every port lists the ups
 RPCS3 commit it derives from and the original author. ARM-specific changes are guarded
 by `ARCH_ARM64`, so x86 builds are unaffected. Developed with AI assistance (Claude).
 
+## v1.1.0 — build `v20260605-cf7d050`
+
+### Major — SPU recompiler re-vendored to upstream RPCS3
+- **SPU LLVM Reduced Loop** — upstream's loop-detection pass; tighter, reduced-iteration codegen for hot SPU spin/wait loops. *(upstream a863e94c2 chain, Malcolm/Whatcookie)*
+- **Authoritative ARM64 NEON recompiler** — `smull`/`umull`/`udot` and the proper TBL2/TBX2 register-scavenger **retry** (compile with TBL2, fall back per-program only if LLVM's allocator fails) replace the earlier blanket TBL1 fallback. *(a87d17529, Malcolm)*
+- **Error-tolerant JIT** (`try_add`/`try_fin` + LLVM crash recovery) backs the retry. The Android decrementer still reads `CNTVCT_EL0`, not `readcyclecounter` (which lowers to `PMCCNTR_EL0` and traps on Android).
+
+### Performance
+- **PPU IR optimization enabled on ARM** — the PPU recompiler's `EarlyCSE`/analysis passes were gated behind `#ifdef ARCH_X64`; now run on ARM too, matching upstream and the SPU path (better codegen on the main game-code path).
+- **JIT feature pinning** — advertise `+dotprod` so `UDOT` can be selected (fixes the ~20-minute "Cannot select AArch64ISD::UDOT" crash) and pin `+/-sha3/sve/sve2` to runtime HWCAP. *(completes b2469039a, Malcolm)*
+
+### Correctness & stability
+- **SPU `reservation_check` fast path fixed** — the always-allocated (vm::main/stack) path returned `== hash` while the slow path returns `!= hash`; a *changed* reservation was reported as still valid, so the lv2 waiter was never cleared (missed invalidation / stale reservation). Now consistent. *(65cd4deb7 portion, Elad)*
+- **`named_thread_group` constructor** — wrong index/duplicate name for the final thread in the check-and-prepare path. *(d8710c431, Elad)*
+- **cpu_thread abnormal-termination UAF** — the "terminated abnormally" warning was logged from the dying thread's torn-down TLS; now logged from a fresh thread. *(a1a140db9, Elad)*
+- **`tar_object::save_directory` slicing** — `fs::dir_entry`→`fs::stat_t` slicing dropped saved-directory entry names (savestate/firmware). *(8c82ce8be, Megamouse)*
+- **sys_fs dev_flash device-alias** — the `CELL_FS_IOS:` alias check looked for `BUILTIN_FLASH` on dev_flash2, but mounts are `BUILTIN_FLSH1/2/3`, so flash alias lookups never matched. *(9e0824112)*
+
+### Build
+- **Embedded version no longer goes stale** — `v<date>-<hash>` is regenerated when HEAD moves instead of being frozen at first cmake configure.
+
+> **Experimental / unverified:** this build compiles cleanly but the SPU re-vendor and the above need broad on-device game testing. SPU/PPU miscompiles show as in-game glitches, not build errors.
+
 ## v1.0.0
 
 ### ARM64 SPU/PPU recompiler performance
