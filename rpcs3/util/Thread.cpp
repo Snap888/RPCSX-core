@@ -56,6 +56,7 @@ DYNAMIC_IMPORT_RENAME("Kernel32.dll", SetThreadDescriptionImport, "SetThreadDesc
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <time.h>
+#include "stack_trace.h"
 #endif
 #ifdef __linux__
 #include <sys/syscall.h>
@@ -2083,9 +2084,41 @@ static void signal_handler(int /*sig*/, siginfo_t* info, void* uct) noexcept
 
 	append_thread_name(msg);
 
+#ifdef ANDROID
+	// Resolve the faulting PC to "<module>+0x<offset>" with a single dladdr (no stack
+	// walk, so it can't itself fault) and log it WITH the fatal message. This is the
+	// symbolizable crash site; feed the offset to llvm-symbolizer -i against the
+	// matching unstripped .so.
+	{
+		const auto pc_sym = utils::get_backtrace_symbols({reinterpret_cast<void*>(RIP(context))});
+		if (!pc_sym.empty())
+		{
+			fmt::append(msg, "Faulting PC: %s\n", pc_sym[0]);
+		}
+	}
+#endif
+
 	sys_log.fatal("\n%s", msg);
 	sys_log.notice("\n%s", dump_useful_thread_info());
 	logs::listener::sync_all();
+
+#ifdef ANDROID
+	// Best-effort full backtrace AFTER the critical info is flushed: unwinding from a
+	// crash site can fault, so do it last where nothing important is at risk.
+	{
+		std::string bt;
+		const auto symbols = utils::get_backtrace_symbols(utils::get_backtrace(64));
+		for (usz i = 0; i < symbols.size(); i++)
+		{
+			fmt::append(bt, "#%u: %s\n", i, symbols[i]);
+		}
+		if (!bt.empty())
+		{
+			sys_log.fatal("\nNative backtrace:\n%s", bt);
+			logs::listener::sync_all();
+		}
+	}
+#endif
 
 	if (rx::isDebuggerPresent())
 	{
@@ -2103,9 +2136,37 @@ static void sigill_handler(int /*sig*/, siginfo_t* info, void* /*uct*/) noexcept
 
 	append_thread_name(msg);
 
+#ifdef ANDROID
+	// Resolve the faulting PC to "<module>+0x<offset>" with a single dladdr (no stack walk).
+	{
+		const auto pc_sym = utils::get_backtrace_symbols({info->si_addr});
+		if (!pc_sym.empty())
+		{
+			fmt::append(msg, "Faulting PC: %s\n", pc_sym[0]);
+		}
+	}
+#endif
+
 	sys_log.fatal("\n%s", msg);
 	sys_log.notice("\n%s", dump_useful_thread_info());
 	logs::listener::sync_all();
+
+#ifdef ANDROID
+	// Best-effort full backtrace after the critical info is flushed.
+	{
+		std::string bt;
+		const auto symbols = utils::get_backtrace_symbols(utils::get_backtrace(64));
+		for (usz i = 0; i < symbols.size(); i++)
+		{
+			fmt::append(bt, "#%u: %s\n", i, symbols[i]);
+		}
+		if (!bt.empty())
+		{
+			sys_log.fatal("\nNative backtrace:\n%s", bt);
+			logs::listener::sync_all();
+		}
+	}
+#endif
 
 	if (rx::isDebuggerPresent())
 	{
