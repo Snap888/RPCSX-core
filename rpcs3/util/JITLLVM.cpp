@@ -94,9 +94,15 @@ namespace
 
 const bool jit_initialize = []() -> bool
 {
-	llvm::InitializeNativeTarget();
-	llvm::InitializeNativeTargetAsmPrinter();
-	llvm::InitializeNativeTargetAsmParser();
+	// NOTE: InitializeNativeTarget() registers LLVM_NATIVE_ARCH, which is fixed at
+	// LLVM *build* time. Our LLVM is a cross-compiled prebuilt, so "native" is not
+	// AArch64 and the JIT target would be missing -> EngineBuilder::create() returns
+	// null -> segfault. Register all targets so the AArch64 backend is always present.
+	llvm::InitializeAllTargetInfos();
+	llvm::InitializeAllTargets();
+	llvm::InitializeAllTargetMCs();
+	llvm::InitializeAllAsmPrinters();
+	llvm::InitializeAllAsmParsers();
 	LLVMLinkInMCJIT();
 	return true;
 }();
@@ -777,6 +783,13 @@ jit_compiler::jit_compiler(const std::unordered_map<std::string, u64>& _link, co
 			.create());
 	}
 
+	// Check before any m_engine use: create() can return null and these calls would
+	// otherwise dereference it (crash inside pthread_mutex_lock on the engine's mutex).
+	if (!m_engine)
+	{
+		fmt::throw_exception("LLVM: Failed to create ExecutionEngine: %s", result);
+	}
+
 	if (!_link.empty())
 	{
 		for (auto&& [name, addr] : _link)
@@ -787,13 +800,10 @@ jit_compiler::jit_compiler(const std::unordered_map<std::string, u64>& _link, co
 
 	if (!_link.empty() || !(flags & 0x1))
 	{
+#ifdef ARCH_X64
 		m_engine->RegisterJITEventListener(llvm::JITEventListener::createIntelJITEventListener());
+#endif
 		m_engine->RegisterJITEventListener(new JITAnnouncer);
-	}
-
-	if (!m_engine)
-	{
-		fmt::throw_exception("LLVM: Failed to create ExecutionEngine: %s", result);
 	}
 
 	fs::device_stat stats{};
