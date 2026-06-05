@@ -192,7 +192,11 @@ namespace rsx
 			const u32 src_line_length = (in_w * in_bpp);
 
 			u32 src_address = 0;
-			const u32 dst_address = get_address(dst_offset, dst_dma, 1); // TODO: Add size
+			// Validate the full destination extent (clip_h output rows at out_pitch,
+			// plus the out_offset prefix) rather than a single byte, so a stale or
+			// corrupt blit command cannot write past mapped memory. get_address
+			// returns 0 on failure, which the checks below route into recover_fifo.
+			const u32 dst_address = get_address(dst_offset, dst_dma, out_offset + out_pitch * clip_h);
 
 			if (is_block_transfer && (clip_h == 1 || (in_pitch == out_pitch && src_line_length == in_pitch)))
 			{
