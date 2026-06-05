@@ -3642,61 +3642,6 @@ public:
 		return llvm::Intrinsic::getDeclaration(_module, id, {get_type<Types>()...});
 	}
 
-	// ARMv8.2 UDOT: c += dot product of u8 lanes of a and b, accumulated per u32 lane
-	template <typename T1, typename T2, typename T3>
-	value_t<u32[4]> udot(T1 a, T2 b, T3 c)
-	{
-		value_t<u32[4]> result;
-
-		const auto data0 = a.eval(m_ir);
-		const auto data1 = b.eval(m_ir);
-		const auto data2 = c.eval(m_ir);
-
-		result.value = m_ir->CreateCall(get_intrinsic<u32[4], u8[16]>(llvm::Intrinsic::aarch64_neon_udot), {data0, data1, data2});
-		return result;
-	}
-
-#ifdef ARCH_ARM64
-
-	template <typename T1, typename T2>
-	value_t<s32[4]> smull(T1 a, T2 b)
-	{
-		value_t<s32[4]> result;
-
-		const auto data0 = a.eval(m_ir);
-		const auto data1 = b.eval(m_ir);
-
-		result.value = m_ir->CreateCall(get_intrinsic<s32[4]>(llvm::Intrinsic::aarch64_neon_smull), {data0, data1});
-		return result;
-	}
-
-	template <typename T1, typename T2>
-	value_t<u32[4]> umull(T1 a, T2 b)
-	{
-		value_t<u32[4]> result;
-
-		const auto data0 = a.eval(m_ir);
-		const auto data1 = b.eval(m_ir);
-
-		result.value = m_ir->CreateCall(get_intrinsic<u32[4]>(llvm::Intrinsic::aarch64_neon_umull), {data0, data1});
-		return result;
-	}
-	
-	template <typename T1, typename T2>
-	auto addp(T1 a, T2 b)
-	{
-		using T_vector = typename is_llvm_expr<T1>::type;
-		const auto data1 = a.eval(m_ir);
-		const auto data2 = b.eval(m_ir);
-
-		const auto func = get_intrinsic<T_vector>(llvm::Intrinsic::aarch64_neon_addp);
-
-		value_t<T_vector> result;
-		result.value = m_ir->CreateCall(func, {data1, data2});
-		return result;
-	}
-#endif
-
 	template <typename T1, typename T2>
 	value_t<u8[16]> gf2p8affineqb(T1 a, T2 b, u8 c)
 	{

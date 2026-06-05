@@ -1629,9 +1629,9 @@ std::vector<std::pair<u32, u32>> spu_thread::dump_callstack_list() const
 	return call_stack_list;
 }
 
-std::string spu_thread::dump_misc() const
+void spu_thread::dump_misc(std::string& ret, std::any& custom_data) const
 {
-	std::string ret = cpu_thread::dump_misc();
+	cpu_thread::dump_misc(ret, custom_data);
 
 	fmt::append(ret, "Block Weight: %u (Retreats: %u)", block_counter, block_failure);
 
@@ -1679,8 +1679,6 @@ std::string spu_thread::dump_misc() const
 			break;
 		}
 	}
-
-	return ret;
 }
 
 void spu_thread::cpu_on_stop()
