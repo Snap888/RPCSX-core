@@ -563,6 +563,21 @@ std::string jit_compiler::cpu(const std::string& _cpu)
 
 	if (m_cpu.empty())
 	{
+#if defined(ARCH_ARM64)
+		// LLVM's host detection misreports many modern ARM SoCs - e.g. it returns
+		// "cortex-a34" (a tiny in-order ARMv8.0 core) for Cortex-A520/A720 devices,
+		// so the JIT ends up scheduled and cost-modeled for the wrong, much weaker
+		// microarchitecture. Prefer our own MIDR table, which knows the current
+		// cores. CPU *features* are pinned separately via setMAttrs, so this only
+		// affects scheduling/cost; an unknown name simply degrades to "generic".
+		m_cpu = aarch64::get_cpu_name();
+		std::transform(m_cpu.begin(), m_cpu.end(), m_cpu.begin(), [](unsigned char c) { return std::tolower(c); });
+
+		if (m_cpu.empty())
+		{
+			m_cpu = llvm::sys::getHostCPUName().str();
+		}
+#else
 		m_cpu = llvm::sys::getHostCPUName().str();
 
 		if (m_cpu == "generic")
@@ -630,6 +645,7 @@ std::string jit_compiler::cpu(const std::string& _cpu)
 			// Upgrade
 			m_cpu = "alderlake";
 		}
+#endif
 	}
 
 	return m_cpu;
