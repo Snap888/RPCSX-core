@@ -1177,6 +1177,13 @@ namespace vk
 		{
 			ensure(scratch_buf);
 
+			// WAW hazard - complete previous work before executing any transfers
+			insert_buffer_memory_barrier(
+				cmd2, scratch_buf->value, 0, scratch_offset,
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+				VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+				VK_ACCESS_TRANSFER_WRITE_BIT);
+
 			if (upload_commands.size() > 1)
 			{
 				auto range_ptr = buffer_copies.data();
