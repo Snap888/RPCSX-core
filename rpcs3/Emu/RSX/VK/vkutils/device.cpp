@@ -852,17 +852,18 @@ namespace vk
 		// Useful for debugging different VRAM configurations
 		u64 vram_allocation_limit = g_cfg.video.vk.vram_allocation_limit * 0x100000ull;
 #ifdef ARCH_ARM64
-		// On Android (and other shared-memory ARM SoCs) the "device local" heap is
-		// system RAM. The default VRAM limit is far larger than any phone, so the
-		// texture/surface caches are free to grow into all of it, starving the rest
-		// of the emulator and the OS -> OOM and unmapped-memory crashes in long
-		// open-world sessions. Reserve headroom by capping the cache budget to a
-		// fraction of the detected memory, unless the user set a stricter limit.
-		const u64 shared_mem_safe_budget = (memory_map.device_local_total_bytes / 3) * 2; // ~66%
-		vram_allocation_limit = std::min(vram_allocation_limit, shared_mem_safe_budget);
-		if (vram_allocation_limit < memory_map.device_local_total_bytes)
+		// The default VRAM limit (65536 MB) is desktop-oriented and meaningless on a
+		// phone, where the Vulkan "device local" heap is shared system RAM: left at
+		// the default, the texture/surface caches are free to grow into all of it,
+		// starving the emulator + OS -> OOM / memory-corruption crashes in long
+		// sessions. When the user has NOT overridden the default, pick a mobile-sane
+		// budget (2/3 of detected memory) that scales to any device. An explicit
+		// user value is always honored (and, as on every platform, only capped to
+		// the physical heap by the std::min below).
+		if (g_cfg.video.vk.vram_allocation_limit == 65536) // untouched desktop default
 		{
-			rsx_log.notice("Capping device-local cache budget to %llu MB (of %llu MB detected) to leave headroom on shared memory",
+			vram_allocation_limit = (memory_map.device_local_total_bytes / 3) * 2;
+			rsx_log.notice("Android: defaulting VRAM cache budget to %llu MB (2/3 of %llu MB detected); override via 'VRAM allocation limit (MB)'",
 				vram_allocation_limit / 0x100000, memory_map.device_local_total_bytes / 0x100000);
 		}
 #endif
