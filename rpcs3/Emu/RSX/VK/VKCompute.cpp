@@ -70,8 +70,13 @@ namespace vk
 			case vk::driver_vendor::unknown:
 			case vk::driver_vendor::INTEL:
 			case vk::driver_vendor::ANV:
+			case vk::driver_vendor::ADRENO:
 				// Intel hw has 8 threads, but LDS allocation behavior makes optimal group size between 64 and 256
-				// Based on intel's own OpenCL recommended settings
+				// Based on intel's own OpenCL recommended settings.
+				// NOTE: Adreno is grouped here to restore the tuning it received before this fork added a
+				// dedicated driver_vendor::ADRENO enum - previously it was classified as 'unknown' and got
+				// these same values. Without an explicit case it fell through with no default, leaving the
+				// member-default group size of 1 (one compute invocation per workgroup, ~wave-size slower).
 				unroll_loops = true;
 				optimal_kernel_size = 1;
 				optimal_group_size = 128;
