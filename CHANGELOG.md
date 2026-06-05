@@ -4,6 +4,61 @@ All changes are on top of upstream `RPCSX/rpcsx` (dev). Every port lists the ups
 RPCS3 commit it derives from and the original author. ARM-specific changes are guarded
 by `ARCH_ARM64`, so x86 builds are unaffected. Developed with AI assistance (Claude).
 
+## v1.3.0 — build `v20260605-c7f5b14`
+
+Base re-vendored to **RPCS3 dev (June 2026)** for the least-diverged subsystems
+(`util/`, `Emu/CPU`, `Memory`, `Crypto`, `Loader`), then a batch of small, safe,
+**credited** RSX/Vulkan fixes ported on top. The RSX, HLE (`ps3fw`) and kernel
+(`kernel/cellos`) subsystems remain our diverged tree — only surgical fixes are
+ported into them. Headline item is an Adreno performance regression fix that
+affects **every Android device**.
+
+### Adreno / mobile GPU
+- **Fixed Adreno compute workgroup size (was 1, now 128).** `compute_task`
+  selects the optimal compute workgroup size per GPU vendor, but when this fork
+  added a dedicated `ADRENO` driver-vendor enum it didn't add a matching case to
+  this switch (which has no `default`), so Adreno silently fell back to the
+  member-default size of **1** — one invocation per workgroup, wasting an entire
+  GPU wavefront on every dispatch. Upstream RPCS3 has no `ADRENO` enum and got
+  128 via its `unknown` case; this restores that. Speeds up the compute-based
+  CPU-detiler / deswizzle path that Adreno relies on (it has no GPU detiler).
+- **Recognize Adreno in the remaining driver-vendor switches** — silences the
+  spurious `Unknown driver vendor!` (≈80×/session) and `Unsupported device` log
+  spam on our primary Android target. Behaviour is unchanged (Adreno wants the
+  same no-op path as NVIDIA/Mali); the NVIDIA FP-sanitize quirk is deliberately
+  *not* enabled for Adreno.
+- **vk: pair `LATE_FRAGMENT_TESTS` with `EARLY` in depth-stencil barriers** —
+  depth writes happen in both stages; tile-based mobile GPUs are strict about
+  this. *(a907cc838, kd-11)*
+- **vk: WAW-hazard barrier before scratch-buffer texture-upload transfers** —
+  prevents corruption on drivers that don't auto-synchronize. *(9dfaca4cd, kd-11)*
+- **vk: barrier before copying occlusion-query results to scratch.** *(b9f05ba71, kd-11)*
+- **vk: fix cubemap detection** when the image has extra creation flags OR'd in
+  (`flags == CUBE` → `flags & CUBE`). *(daa53c864, kd-11)*
+- **vk: fix the CPU detiler-path crash** (the path Adreno/Turnip uses since it
+  has no GPU detiler). *(e0c3df532, kd-11)*
+- **vk: add the missing `TRANSFER→FRAGMENT` barrier** in `data_heap::sync`. *(46bbbd205, kd-11)*
+
+### RSX correctness
+- **Re-upload weak-vertex-cache entries when the underlying data changed** — the
+  cache keyed only on address+length, returning stale vertex data when a game
+  reused an address; now fingerprinted. Fixes rendering glitches. *(e66f1fa30 +
+  86b2773c2, Iván Díaz Álvarez)*
+- **Fix deswizzle of wide (8/16-byte) texel formats** — were decoded at the wrong
+  width on the software path most Android devices use. *(3574677b6, kd-11)*
+
+### Stability
+- **Bail out of the shader-compiler backlog on teardown** — stopping emulation
+  mid-scene with shaders queued blocked the RSX-thread join for seconds (seen as
+  a "freeze"/force-close when skipping a cutscene). The async compiler workers
+  now check the abort flag inside their drain loop; pending pipelines are
+  discarded on teardown anyway.
+- **Defensive draw-path guards** against stale-FIFO out-of-bounds: bounds-check
+  vertex upload source, index array, and skip textures with an unmapped source
+  offset — convert wild reads/writes into a skipped draw instead of a crash.
+- **system: fix the restart-then-quit restart loop** — `after_kill_callback` was
+  moved-from but not cleared. *(fb1c1eeae, #18723)*
+
 ## v1.2.1 — build `v20260605-6c9e86f`
 
 - **RLIMIT_MEMLOCK hard limit raised** — `set_rlim` only raised the soft limit
