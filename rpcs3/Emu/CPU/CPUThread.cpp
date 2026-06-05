@@ -715,8 +715,17 @@ void cpu_thread::operator()()
 		{
 			if (_this)
 			{
-				sys_log.warning("CPU Thread '%s' terminated abnormally!", name);
 				cleanup();
+
+				// Log from a fresh thread: the dying thread's TLS is being torn
+				// down, so logging here (which touches g_tls_log_prefix) is a
+				// use-after-free. Capture the name by value.
+				auto log_thread = named_thread("CPU Thread Cleanup Logger", [name = name]()
+				{
+					sys_log.warning("CPU Thread '%s' terminated abnormally!", name);
+				});
+
+				log_thread();
 			}
 		}
 	} cleanup;
