@@ -553,6 +553,19 @@ namespace rsx
 				const u32 data_size = range.second * block->attribute_stride;
 				const u32 vertex_base = range.first * block->attribute_stride;
 
+				// Defensive: a desynced FIFO can execute stale display-list draws with
+				// garbage vertex offsets/strides (observed crashing inFamous with a wild
+				// write while uploading such a draw). Skip the upload if the source
+				// vertex region isn't fully mapped, instead of reading/overrunning into
+				// unmapped memory and faulting the RSX thread.
+				if (!block->real_offset_address ||
+					!vm::check_addr(block->real_offset_address + vertex_base, vm::page_readable, data_size))
+				{
+					rsx_log.error("Skipped out-of-bounds vertex upload (addr=0x%x, base=0x%x, size=0x%x, stride=%u)",
+						block->real_offset_address, vertex_base, data_size, block->attribute_stride);
+					continue;
+				}
+
 				g_fxo->get<rsx::dma_manager>().copy(persistent, vm::_ptr<char>(block->real_offset_address) + vertex_base, data_size);
 				persistent += data_size;
 			}
