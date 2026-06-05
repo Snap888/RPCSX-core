@@ -7,6 +7,7 @@
 #include "Common/unordered_map.hpp"
 #include "Emu/System.h"
 #include "Emu/cache_utils.hpp"
+#include "Emu/Memory/vm.h"
 #include "Emu/RSX/Program/RSXVertexProgram.h"
 #include "Emu/RSX/Program/RSXFragmentProgram.h"
 #include "Overlays/Shaders/shader_loading_dialog.h"
@@ -593,6 +594,7 @@ namespace rsx
 			uptr local_address;
 			u32 offset_in_heap;
 			u32 data_length;
+			u64 fingerprint;
 		};
 
 		// A weak vertex cache with no data checks or memory range locks
@@ -621,6 +623,15 @@ namespace rsx
 					return nullptr;
 				}
 
+				// Check if data at local_address changed vs what was stored in the cache
+				// (game reused the address with new vertex data). Re-upload if so.
+				if (auto sudo_ptr = vm::get_super_ptr<char>(local_addr);
+					data_length >= 8 && found->second.fingerprint != *utils::bless<u64>(sudo_ptr))
+				{
+					vertex_ranges.erase(key);
+					return nullptr;
+				}
+
 				return std::addressof(found->second);
 			}
 
@@ -630,6 +641,12 @@ namespace rsx
 				v.data_length = data_length;
 				v.local_address = local_addr;
 				v.offset_in_heap = offset_in_heap;
+
+				if (auto sudo_ptr = vm::get_super_ptr<char>(local_addr); data_length >= 8)
+				{
+					// bless avoids endian conversion and strict-aliasing UB
+					v.fingerprint = *utils::bless<u64>(sudo_ptr);
+				}
 
 				const auto key = hash(local_addr, data_length);
 				vertex_ranges[key] = v;
