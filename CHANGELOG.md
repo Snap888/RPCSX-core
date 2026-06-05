@@ -4,6 +4,43 @@ All changes are on top of upstream `RPCSX/rpcsx` (dev). Every port lists the ups
 RPCS3 commit it derives from and the original author. ARM-specific changes are guarded
 by `ARCH_ARM64`, so x86 builds are unaffected. Developed with AI assistance (Claude).
 
+## v1.2.0 — build `v20260605-c9049b3`
+
+### Open-world RSX crash hardening (inFamous long-session force-close)
+Long open-world sessions on Adreno/Turnip could force-close with an RSX-thread
+segfault. Root cause: under "Fast" RSX FIFO accuracy on weak-memory ARM, the
+command processor can race ahead of the game and start executing stale /
+uncommitted commands, whose corrupt offsets then drive an out-of-bounds memory
+access. Both the navigation and the memory-access points are now guarded so a
+desync **recovers** instead of crashing:
+- **Transfer-engine destination bounds** — `NV0039` (`buffer_notify`) and
+  `NV3089` (`image_in`) validated only the *start* of the destination, then
+  copied the full strided extent. They now pass the real transfer length to
+  `get_address` (which returns 0 on out-of-range) and skip / `recover_fifo`
+  instead of `memcpy`-ing into unmapped host memory. (`NV308A` already did this.)
+- **FIFO jump/CALL target validation** — `run_FIFO` followed jump/call targets
+  unconditionally; a target in unmapped IO now triggers `recover_fifo` rather
+  than executing whatever stale memory the GET pointer lands on.
+
+> These convert the crash into the engine's existing recovery path. The
+> underlying FIFO desync can be further reduced by raising **RSX FIFO Accuracy**
+> above "Fast" (Advanced settings).
+
+### Android memory / GPU
+- **Device-adaptive VRAM budget, now user-respecting** — on ARM the Vulkan
+  "device local" heap is shared system RAM, so the desktop default limit
+  (65536 MB) let the caches grow into all of it (OOM / corruption in long
+  sessions). When left at the default it now picks 2/3 of detected memory to
+  leave headroom; **any explicit user value is honored as-is**. Scales to any
+  device; x86 (dedicated VRAM) unaffected. *(refines the v1.1.0 clamp)*
+- **Adreno classified as a driver vendor** — Qualcomm proprietary and Mesa
+  Turnip were falling through to `unknown` (upstream RPCS3 doesn't classify them
+  either). Detected by name and `VkDriverId`; groundwork for future Turnip-
+  specific handling, no behaviour change yet.
+
+> These are our own changes (developed with AI assistance), not ports from
+> upstream RPCS3.
+
 ## v1.1.0 — build `v20260605-cdd53aa`
 
 ### Major — SPU recompiler re-vendored to upstream RPCS3
