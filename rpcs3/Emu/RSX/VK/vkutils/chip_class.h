@@ -56,7 +56,8 @@ namespace vk
 		V3DV,
 		HONEYKRISP,
 		PANVK,
-		ARM_MALI
+		ARM_MALI,
+		ADRENO // Qualcomm proprietary or Mesa Turnip
 	};
 
 	driver_vendor get_driver_vendor();
@@ -99,5 +100,9 @@ namespace vk
 	static inline bool is_INTEL(driver_vendor vendor)
 	{
 		return vendor == driver_vendor::INTEL || vendor == driver_vendor::ANV;
+	}
+	static inline bool is_ADRENO(driver_vendor vendor)
+	{
+		return vendor == driver_vendor::ADRENO;
 	}
 } // namespace vk

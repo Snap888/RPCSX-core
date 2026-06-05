@@ -327,6 +327,11 @@ namespace vk
 				return driver_vendor::ARM_MALI;
 			}
 
+			if (gpu_name.find("Adreno") != umax || gpu_name.find("Turnip") != umax)
+			{ // e.g. "Turnip Adreno (TM) 640" (Mesa) or "Adreno (TM) ###" (Qualcomm)
+				return driver_vendor::ADRENO;
+			}
+
 			return driver_vendor::unknown;
 		}
 		else
@@ -358,6 +363,9 @@ namespace vk
 				return driver_vendor::PANVK;
 			case VK_DRIVER_ID_ARM_PROPRIETARY:
 				return driver_vendor::ARM_MALI;
+			case VK_DRIVER_ID_MESA_TURNIP:
+			case VK_DRIVER_ID_QUALCOMM_PROPRIETARY:
+				return driver_vendor::ADRENO;
 			default:
 				// Mobile?
 				return driver_vendor::unknown;
