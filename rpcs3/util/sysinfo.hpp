@@ -54,8 +54,9 @@ namespace utils
 	bool has_appropriate_um_wait();
 
 	bool has_um_wait();
-
 #ifdef ARCH_ARM64
+	bool has_neon();
+
 	// Runtime detection of optional AArch64 features (via HWCAP).
 	// True if the CPU supports the ARMv8.2 dot product instructions (UDOT/SDOT)
 	bool has_dotprod();
@@ -69,6 +70,8 @@ namespace utils
 	std::string get_system_info();
 
 	std::string get_firmware_version();
+
+	std::pair<u64, u64> get_memory_usage();
 
 	struct OS_version
 	{

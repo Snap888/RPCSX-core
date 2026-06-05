@@ -739,6 +739,14 @@ bool cfg::node::from_string(std::string_view value, bool dynamic)
 	return false;
 }
 
+void cfg::node::restore_defaults()
+{
+	for (auto& node : m_nodes)
+	{
+		node->restore_defaults();
+	}
+}
+
 void cfg::node::from_default()
 {
 	for (auto& node : m_nodes)

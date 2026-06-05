@@ -2073,13 +2073,6 @@ static void signal_handler(int /*sig*/, siginfo_t* info, void* uct) noexcept
 			return;
 		}
 	}
-	else if (exec64_2 < 0x100000000ull && !is_executing)
-	{
-		if (thread_ctrl::get_current() && handle_access_violation(static_cast<u32>(exec64_2), is_writing, true, context))
-		{
-			return;
-		}
-	}
 
 	std::string msg = fmt::format("Segfault %s location %p at %p.\n", cause, info->si_addr, RIP(context));
 
@@ -2959,32 +2952,6 @@ void thread_base::exec()
 	}
 
 	report_fatal_error(reason);
-}
-
-void thread_ctrl::silent_exit() noexcept
-{
-	if (const auto _this = g_tls_this_thread)
-	{
-		g_tls_error_callback();
-
-		u64 _self = _this->finalize(thread_state::errored);
-
-		if (_self == umax)
-		{
-			// Unused, detached thread support remnant
-			delete _this;
-		}
-
-		thread_base::finalize(umax);
-	}
-
-#ifdef _WIN32
-	_endthreadex(0);
-#else
-	pthread_exit(nullptr);
-#endif
-
-	std::abort();
 }
 
 void thread_ctrl::detect_cpu_layout()

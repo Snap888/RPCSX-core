@@ -432,7 +432,7 @@ namespace asmjit
 		c.bind(next);
 	}
 #endif
-} // namespace asmjit
+}
 
 // Build runtime function with asmjit::X86Assembler
 template <typename FT, typename Asm = native_asm, typename F>
@@ -505,7 +505,7 @@ namespace llvm
 	class ExecutionEngine;
 	class Module;
 	class StringRef;
-} // namespace llvm
+}
 
 enum class thread_state : u32;
 
@@ -513,10 +513,10 @@ enum class thread_state : u32;
 class jit_compiler final
 {
 	// Local LLVM context
-	std::unique_ptr<llvm::LLVMContext, void (*)(llvm::LLVMContext*)> m_context{nullptr, [](llvm::LLVMContext*) {}};
+	std::unique_ptr<llvm::LLVMContext> m_context{};
 
 	// Execution instance
-	std::unique_ptr<llvm::ExecutionEngine, void (*)(llvm::ExecutionEngine*)> m_engine{nullptr, [](llvm::ExecutionEngine*) {}};
+	std::unique_ptr<llvm::ExecutionEngine> m_engine{};
 
 	// Arch
 	std::string m_cpu{};
@@ -564,10 +564,7 @@ public:
 	// Finalize
 	void fin();
 
-	// Error-tolerant variants: return false after an LLVM fatal-error recovery
-	// (the compiler must then be discarded). Used by the SPU TBL2 retry path.
-	bool try_add(std::unique_ptr<llvm::Module> _module, const std::string& path, std::string& error);
-	bool try_add(std::unique_ptr<llvm::Module> _module, std::string& error);
+	// Returns false after LLVM fatal recovery. The compiler must be discarded.
 	bool try_fin(std::string& error);
 
 	// Get compiled function address
@@ -585,6 +582,6 @@ public:
 	bool add_sub_disk_space(ssz space);
 };
 
-const char* fallback_cpu_detection();
+const char *fallback_cpu_detection();
 
 #endif // LLVM_AVAILABLE
