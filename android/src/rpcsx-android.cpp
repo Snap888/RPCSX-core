@@ -1790,6 +1790,23 @@ extern "C" bool _rpcsx_initialize(std::string_view rootDir,
       return;
     }
 
+    // Try to raise the hard limit too, not just the soft limit. Android's
+    // default RLIMIT_MEMLOCK hard cap is small, so only bumping the soft limit
+    // up to it (the previous behaviour) still left vm::lock_sudo failing and the
+    // RSX/main/stack guest memory unpinned ("Failed to lock sudo memory" in the
+    // log). Never lower an already-higher hard limit; fall back to the soft-only
+    // bump if the kernel refuses to raise the hard limit.
+    // (Raising RLIMIT_MEMLOCK to RLIM_INFINITY follows aps3e, by aenu.)
+    rlimit64 want{};
+    want.rlim_max = std::max<std::uint64_t>(rlim.rlim_max, limit);
+    want.rlim_cur = std::min<std::uint64_t>(want.rlim_max, limit);
+
+    if (setrlimit64(resource, &want) == 0) {
+      rpcsx_android.notice("rlimit[%d] = %u (max %u)", resource, want.rlim_cur,
+                           want.rlim_max);
+      return;
+    }
+
     rlim.rlim_cur = std::min<std::size_t>(rlim.rlim_max, limit);
     rpcsx_android.error("rlimit[%d] = %u (requested %u, max %u)", resource,
                         rlim.rlim_cur, limit, rlim.rlim_max);
