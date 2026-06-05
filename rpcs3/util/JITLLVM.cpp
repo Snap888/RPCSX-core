@@ -577,6 +577,15 @@ std::string jit_compiler::cpu(const std::string& _cpu)
 		{
 			m_cpu = llvm::sys::getHostCPUName().str();
 		}
+
+		// Last-resort guard: if detection still lands on a tiny in-order core (LLVM
+		// reports these for some unknown SoCs), use a neutral out-of-order baseline
+		// instead - it can't be worse than ARMv8.0 / in-order scheduling for a device
+		// actually capable of running this emulator.
+		if (m_cpu.empty() || m_cpu == "cortex-a34" || m_cpu == "cortex-a35")
+		{
+			m_cpu = "generic";
+		}
 #else
 		m_cpu = llvm::sys::getHostCPUName().str();
 

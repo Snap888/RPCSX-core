@@ -256,9 +256,38 @@ namespace aarch64
 		return part_info ? part_info->name : nullptr;
 	}
 
+	// Best-effort max CPU frequency (kHz) for a core; 0 if cpufreq isn't exposed.
+	static u64 read_max_freq([[maybe_unused]] u32 cpu_id)
+	{
+#if defined(__linux__)
+		const std::string path = fmt::format("/sys/devices/system/cpu/cpu%u/cpufreq/cpuinfo_max_freq", cpu_id);
+		if (!fs::is_file(path))
+		{
+			return 0;
+		}
+
+		std::string value;
+		if (!fs::file(path, fs::read).read(value, 32))
+		{
+			return 0;
+		}
+		return std::strtoull(value.c_str(), nullptr, 10);
+#else
+		return 0;
+#endif
+	}
+
 	std::string get_cpu_name()
 	{
-		std::map<u64, int> core_layout;
+		// Heterogeneous (big.LITTLE) SoCs report several core types. Target the
+		// highest-performance one (prime/big): the emulation's hot threads (PPU,
+		// SPU) run there, so the JIT should use that core's scheduling and cost
+		// model. Identify it by max frequency; if cpufreq isn't readable, fall back
+		// to the first reported core.
+		u64 best_midr = 0;
+		u64 best_freq = 0;
+		bool found = false;
+
 		for (u32 i = 0; i < std::thread::hardware_concurrency(); ++i)
 		{
 			const auto midr = read_MIDR_EL1(i);
@@ -266,34 +295,29 @@ namespace aarch64
 			{
 				break;
 			}
+			if (midr == 0)
+			{
+				continue;
+			}
 
-			core_layout[midr]++;
+			const auto freq = read_max_freq(i);
+			if (!found || freq > best_freq)
+			{
+				best_midr = midr;
+				best_freq = freq;
+				found = true;
+			}
 		}
 
-		if (core_layout.empty())
+		if (!found)
 		{
 			return {};
 		}
 
-		const cpu_entry_t* lowest_part_info = nullptr;
-		for (const auto& [midr, count] : core_layout)
-		{
-			const auto implementer_id = (midr >> 24) & 0xff;
-			const auto part_id = (midr >> 4) & 0xfff;
-
-			const auto part_info = find_cpu_part(implementer_id, part_id);
-			if (!part_info)
-			{
-				return {};
-			}
-
-			if (lowest_part_info == nullptr || lowest_part_info > part_info)
-			{
-				lowest_part_info = part_info;
-			}
-		}
-
-		return lowest_part_info ? lowest_part_info->name : "";
+		const auto implementer_id = (best_midr >> 24) & 0xff;
+		const auto part_id = (best_midr >> 4) & 0xfff;
+		const auto part_info = find_cpu_part(implementer_id, part_id);
+		return part_info ? part_info->name : "";
 	}
 
 	std::string get_cpu_brand()
