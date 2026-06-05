@@ -4,6 +4,15 @@ All changes are on top of upstream `RPCSX/rpcsx` (dev). Every port lists the ups
 RPCS3 commit it derives from and the original author. ARM-specific changes are guarded
 by `ARCH_ARM64`, so x86 builds are unaffected. Developed with AI assistance (Claude).
 
+## v1.2.1 — build `v20260605-6c9e86f`
+
+- **RLIMIT_MEMLOCK hard limit raised** — `set_rlim` only raised the soft limit
+  up to Android's small default hard cap, so `vm::lock_sudo` failed ("Failed to
+  lock sudo memory") and the RSX/main/stack guest memory was never pinned. Now
+  the hard limit is raised too (with a safe fallback), so hot guest memory stays
+  resident instead of being reclaimable under long-session pressure. *(approach
+  from [aps3e](https://github.com/aenu1/aps3e) by aenu)*
+
 ## v1.2.0 — build `v20260605-c9049b3`
 
 ### Open-world RSX crash hardening (inFamous long-session force-close)
