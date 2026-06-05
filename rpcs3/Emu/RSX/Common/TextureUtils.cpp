@@ -776,6 +776,16 @@ std::vector<rsx::subresource_layout> get_subresources_layout_impl(const RsxTextu
 	auto pitch = texture.pitch();
 
 	const u32 texaddr = rsx::get_address(texture.offset(), texture.location());
+
+	// Defensive: a stale/garbage draw (FIFO desync) can bind a texture with a bad
+	// offset. Skip it (empty layout -> upload skipped) if the source is unmapped,
+	// rather than reading from unmapped memory and faulting the RSX thread.
+	if (!texaddr || !vm::check_addr(texaddr, vm::page_readable)) [[unlikely]]
+	{
+		rsx_log.error("Skipped texture with out-of-bounds offset (addr=0x%x, fmt=0x%x, %ux%u, pitch=%u)", texaddr, format, w, h, pitch);
+		return {};
+	}
+
 	auto pixels = vm::_ptr<const std::byte>(texaddr);
 
 	const bool is_swizzled = !(texture.format() & CELL_GCM_TEXTURE_LN);
