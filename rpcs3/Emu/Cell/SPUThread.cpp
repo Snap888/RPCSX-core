@@ -5342,7 +5342,7 @@ bool spu_thread::reservation_check(u32 addr, const decltype(rdata)& data, u32 cu
 
 	// Ensure data is allocated (HACK: would raise LR event if not)
 	// Set range_lock first optimistically
-	range_lock->store(u64{128} << 32 | addr);
+	range_lock->store(u64{128} << 32 | addr | vm::range_readable);
 
 	u64 lock_val = *std::prev(std::end(vm::g_range_lock_set));
 	u64 old_lock = 0;
@@ -5423,7 +5423,7 @@ bool spu_thread::reservation_check(u32 addr, u32 hash, atomic_t<u64, 64>* range_
 
 	// Ensure data is allocated (HACK: would raise LR event if not)
 	// Set range_lock first optimistically
-	range_lock->store(u64{128} << 32 | addr);
+	range_lock->store(u64{128} << 32 | addr | vm::range_readable);
 
 	u64 lock_val = *std::prev(std::end(vm::g_range_lock_set));
 	u64 old_lock = 0;
