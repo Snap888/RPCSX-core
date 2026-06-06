@@ -4,6 +4,8 @@
 #include "Emu/Audio/Null/NullAudioBackend.h"
 #include "Emu/Cell/PPUAnalyser.h"
 #include "Emu/Cell/SPURecompiler.h"
+#include "util/bin_patch.h"
+#include <set>
 #include "Emu/IdManager.h"
 #include "Emu/Io/KeyboardHandler.h"
 #include "Emu/Io/Null/NullKeyboardHandler.h"
@@ -2540,6 +2542,129 @@ extern "C" bool _rpcsx_installKey(JNIEnv *env, int fd, long progressId,
 
   Progress(env, progressId).failure("Unsupported key type");
   return false;
+}
+
+// ---- Patch manager bridge ----------------------------------------------
+// The core patch_engine (util/bin_patch) already loads patches/patch.yml and
+// applies enabled patches per game-hash on boot. patch_engine::load() also
+// merges the user's patch_config.yml enabled state into the map, so after a
+// load() the map reflects the effective enabled state. We expose enough to let
+// the app list patches and flip their enabled flag (persisted via save_config).
+
+static void patch_json_escape(std::string &out, std::string_view s) {
+  for (char c : s) {
+    switch (c) {
+    case '"': out += "\\\""; break;
+    case '\\': out += "\\\\"; break;
+    case '\n': out += "\\n"; break;
+    case '\r': out += "\\r"; break;
+    case '\t': out += "\\t"; break;
+    default:
+      if (static_cast<unsigned char>(c) < 0x20) {
+        fmt::append(out, "\\u%04x",
+                    static_cast<unsigned>(static_cast<unsigned char>(c)));
+      } else {
+        out += c;
+      }
+    }
+  }
+}
+
+extern "C" std::string _rpcsx_patchEngineVersion() {
+  return patch_engine_version;
+}
+
+// Returns a JSON array: [{hash,name,author,version,notes,serials:[...],enabled}]
+extern "C" std::string _rpcsx_patchesList() {
+  patch_engine::patch_map patches;
+  patch_engine::load(patches, patch_engine::get_patches_path() + "patch.yml");
+  patch_engine::load(patches, patch_engine::get_imported_patch_path());
+
+  std::string out = "[";
+  bool first = true;
+
+  for (const auto &[hash, container] : patches) {
+    for (const auto &[description, info] : container.patch_info_map) {
+      bool enabled = false;
+      std::set<std::string> serials;
+
+      for (const auto &[title, serial_map] : info.titles) {
+        for (const auto &[serial, version_map] : serial_map) {
+          serials.insert(serial);
+          for (const auto &[version, cfg] : version_map) {
+            if (cfg.enabled) {
+              enabled = true;
+            }
+          }
+        }
+      }
+
+      if (!first) {
+        out += ",";
+      }
+      first = false;
+
+      out += "{\"hash\":\"";
+      patch_json_escape(out, hash);
+      out += "\",\"name\":\"";
+      patch_json_escape(out, description);
+      out += "\",\"author\":\"";
+      patch_json_escape(out, info.author);
+      out += "\",\"version\":\"";
+      patch_json_escape(out, info.patch_version);
+      out += "\",\"notes\":\"";
+      patch_json_escape(out, info.notes);
+      out += "\",\"serials\":[";
+      bool sfirst = true;
+      for (const auto &s : serials) {
+        if (!sfirst) {
+          out += ",";
+        }
+        sfirst = false;
+        out += "\"";
+        patch_json_escape(out, s);
+        out += "\"";
+      }
+      out += "],\"enabled\":";
+      out += enabled ? "true" : "false";
+      out += "}";
+    }
+  }
+
+  out += "]";
+  return out;
+}
+
+// Enable/disable a patch (all of its serials/versions) and persist to
+// patch_config.yml. Returns false if the patch was not found.
+extern "C" bool _rpcsx_patchSetEnabled(std::string_view hash,
+                                       std::string_view description,
+                                       bool enabled) {
+  patch_engine::patch_map patches;
+  patch_engine::load(patches, patch_engine::get_patches_path() + "patch.yml");
+  patch_engine::load(patches, patch_engine::get_imported_patch_path());
+
+  const auto hash_it = patches.find(std::string(hash));
+  if (hash_it == patches.end()) {
+    return false;
+  }
+
+  const auto desc_it =
+      hash_it->second.patch_info_map.find(std::string(description));
+  if (desc_it == hash_it->second.patch_info_map.end()) {
+    return false;
+  }
+
+  for (auto &[title, serial_map] : desc_it->second.titles) {
+    for (auto &[serial, version_map] : serial_map) {
+      for (auto &[version, cfg] : version_map) {
+        cfg.enabled = enabled;
+      }
+    }
+  }
+
+  patch_engine::save_config(patches);
+  return true;
 }
 
 extern "C" std::string _rpcsx_systemInfo() {
