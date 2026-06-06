@@ -1766,7 +1766,13 @@ extern "C" bool _rpcsx_initialize(std::string_view rootDir,
   }
 
   logs::stored_message ver{rpcsx_android.always()};
-  ver.text = fmt::format("RPCSX-ps3-android v%s", rx::getVersion().toString());
+  // The user-facing name is the ordered date-time (see Version::toString); keep
+  // the exact git revision here in the log so a report still pins the commit.
+  const auto rxVer = rx::getVersion();
+  const auto rxRev = rxVer.gitRev();
+  ver.text = rxRev.empty()
+                 ? fmt::format("RPCSX-ps3-android v%s", rxVer.toString())
+                 : fmt::format("RPCSX-ps3-android v%s (%s)", rxVer.toString(), rxRev);
 
   // Write System information
   logs::stored_message sys{rpcsx_android.always()};
