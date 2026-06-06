@@ -1877,7 +1877,10 @@ extern "C" int _rpcsx_boot(std::string_view path_) {
     path.pop_back();
   }
 
-  return static_cast<int>(Emu.BootGame(path, "", false, cfg_mode::global));
+  // cfg_mode::custom makes the emulator load a per-game custom config
+  // (config/custom_configs/config_<title_id>.yml) when one exists, falling back
+  // to the global config otherwise - mirroring desktop RPCS3.
+  return static_cast<int>(Emu.BootGame(path, "", false, cfg_mode::custom));
 }
 
 extern "C" int _rpcsx_getState() {
@@ -2665,6 +2668,122 @@ extern "C" bool _rpcsx_patchSetEnabled(std::string_view hash,
 
   patch_engine::save_config(patches);
   return true;
+}
+
+static cfg::_base *find_cfg_node(cfg::_base *root, std::string_view path);
+
+// --- Per-game custom configuration -----------------------------------------
+// Mirrors desktop RPCS3's per-title configs (config/custom_configs/
+// config_<serial>.yml). _rpcsx_boot uses cfg_mode::custom, so a config created
+// here is applied automatically when that game boots, with the global config as
+// fallback. The serial is the game's title id (the install-folder name).
+
+// True if a custom config file exists for this game.
+extern "C" bool _rpcsx_customConfigExists(std::string_view serial) {
+  if (serial.empty()) {
+    return false;
+  }
+  return fs::is_file(rpcs3::utils::get_custom_config_path(std::string(serial)));
+}
+
+// Create a custom config by snapshotting the current global settings, giving
+// the user a sensible starting point to tweak (RPCS3's "Create Custom
+// Configuration from current settings").
+extern "C" bool _rpcsx_customConfigCreate(std::string_view serial) {
+  if (serial.empty()) {
+    return false;
+  }
+  Emulator::SaveSettings(g_cfg.to_string(), std::string(serial));
+  return _rpcsx_customConfigExists(serial);
+}
+
+// Remove a game's custom config; subsequent boots fall back to the global one.
+extern "C" bool _rpcsx_customConfigDelete(std::string_view serial) {
+  if (serial.empty()) {
+    return false;
+  }
+  return fs::remove_file(
+      rpcs3::utils::get_custom_config_path(std::string(serial)));
+}
+
+// Loads the effective per-game config view into cfg: the global config overlaid
+// with the game's custom file (if any) - exactly what boot will apply. Filled by
+// reference because cfg_root is non-copyable/non-movable.
+static void load_effective_custom_cfg(cfg_root &cfg, std::string_view serial) {
+  cfg.from_string(g_cfg.to_string());
+  if (!serial.empty()) {
+    if (fs::file f{rpcs3::utils::get_custom_config_path(std::string(serial))}) {
+      cfg.from_string(f.to_string());
+    }
+  }
+}
+
+// Read a settings node for a game (same JSON shape as _rpcsx_settingsGet).
+extern "C" std::string _rpcsx_customConfigGet(std::string_view serial,
+                                              std::string_view path) {
+  cfg_root cfg;
+  load_effective_custom_cfg(cfg, serial);
+  auto node = find_cfg_node(&cfg, path);
+  if (node == nullptr) {
+    return nullptr;
+  }
+  return node->to_json().dump(4);
+}
+
+// Set a settings node for a game and persist it to the custom config file.
+// Creates the file on first edit (seeded from the global config).
+extern "C" bool _rpcsx_customConfigSet(std::string_view serial,
+                                       std::string_view path,
+                                       std::string_view valueString) {
+  if (serial.empty()) {
+    return false;
+  }
+
+  nlohmann::json value;
+  try {
+    value = nlohmann::json::parse(valueString);
+  } catch (...) {
+    rpcsx_android.error(
+        "customConfigSet: node %s passed with invalid json '%s'", path,
+        valueString);
+    return false;
+  }
+
+  cfg_root cfg;
+  load_effective_custom_cfg(cfg, serial);
+  auto node = find_cfg_node(&cfg, path);
+  if (node == nullptr) {
+    rpcsx_android.error("customConfigSet: node %s not found", path);
+    return false;
+  }
+
+  if (!node->from_json(value, false)) {
+    rpcsx_android.error("customConfigSet: node %s not accepts value '%s'", path,
+                        value.dump());
+    return false;
+  }
+
+  Emulator::SaveSettings(cfg.to_string(), std::string(serial));
+  return true;
+}
+
+// Import a full config (a YAML string) as a game's custom config. Used for the
+// one-tap community config: the value is validated/normalized against our
+// schema before being saved, so a malformed download cannot break boot.
+extern "C" bool _rpcsx_customConfigImport(std::string_view serial,
+                                          std::string_view yaml) {
+  if (serial.empty()) {
+    return false;
+  }
+
+  cfg_root cfg;
+  if (!cfg.from_string(std::string(yaml))) {
+    rpcsx_android.error("customConfigImport: invalid config for %s", serial);
+    return false;
+  }
+
+  Emulator::SaveSettings(cfg.to_string(), std::string(serial));
+  return _rpcsx_customConfigExists(serial);
 }
 
 extern "C" std::string _rpcsx_systemInfo() {
