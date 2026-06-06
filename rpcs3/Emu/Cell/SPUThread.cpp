@@ -5498,28 +5498,46 @@ usz spu_thread::register_cache_line_waiter(u32 addr)
 {
 	const u64 value = u64{compute_rdata_hash32(rdata)} << 32 | addr;
 
-	for (usz i = 0; i < std::size(g_spu_waiters_by_value); i++)
+	for (usz attempts = 0; attempts < 2; attempts++)
 	{
-		auto [old, ok] = g_spu_waiters_by_value[i].fetch_op([value](u64& x)
-			{
-				if (x == 0)
-				{
-					x = value + 1;
-					return true;
-				}
+		// First, scan for a matching address waiter
+		// Remembering a potentially empty spot
+		usz empty_it = umax;
 
-				if ((x & -128) == value)
-				{
-					x++;
-					return true;
-				}
-
-				return false;
-			});
-
-		if (ok)
+		for (usz i = 0; i < std::size(g_spu_waiters_by_value); i++)
 		{
-			return i;
+			auto [old, ok] = g_spu_waiters_by_value[i].fetch_op([&](u64& x)
+				{
+					if (x == 0)
+					{
+						empty_it = i;
+						return false;
+					}
+
+					if ((x & -128) == value)
+					{
+						x++;
+						return true;
+					}
+
+					return false;
+				});
+
+			if (ok)
+			{
+				return i;
+			}
+		}
+
+		if (empty_it == umax)
+		{
+			continue;
+		}
+
+		// If we did not find an existing waiter, try to occupy an empty spot
+		if (g_spu_waiters_by_value[empty_it].compare_and_swap_test(0, value + 1))
+		{
+			return empty_it;
 		}
 	}
 
@@ -5535,7 +5553,7 @@ void spu_thread::deregister_cache_line_waiter(usz index)
 
 	ensure(index < std::size(g_spu_waiters_by_value));
 
-	g_spu_waiters_by_value[index].fetch_op([](u64& x)
+	g_spu_waiters_by_value[index].atomic_op([](u64& x)
 		{
 			x--;
 
@@ -5543,8 +5561,6 @@ void spu_thread::deregister_cache_line_waiter(usz index)
 			{
 				x = 0;
 			}
-
-			return false;
 		});
 }
 
