@@ -514,7 +514,7 @@ error_code sys_mmapper_free_address(ppu_thread &ppu, u32 addr) {
 
   // If a memory block is freed, remove it from page notification table.
   auto &pf_entries = g_fxo->get<page_fault_notification_entries>();
-  std::lock_guard lock(pf_entries.mutex);
+  std::unique_lock lock(pf_entries.mutex);
 
   auto ind_to_remove = pf_entries.entries.begin();
   for (; ind_to_remove != pf_entries.entries.end(); ++ind_to_remove) {
@@ -523,7 +523,13 @@ error_code sys_mmapper_free_address(ppu_thread &ppu, u32 addr) {
     }
   }
   if (ind_to_remove != pf_entries.entries.end()) {
+    const u32 port_id = ind_to_remove->port_id;
     pf_entries.entries.erase(ind_to_remove);
+    lock.unlock();
+    // Release the event port tied to this page-fault notification (was leaked);
+    // done outside the lock to avoid deadlock with the event subsystem.
+    sys_event_port_disconnect(ppu, port_id);
+    sys_event_port_destroy(ppu, port_id);
   }
 
   return CELL_OK;
