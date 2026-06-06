@@ -5958,11 +5958,9 @@ s64 spu_thread::get_ch_value(u32 ch)
 
 			if (is_stopped(old))
 			{
-				if (cache_line_waiter_index != umax)
-				{
-					g_spu_waiters_by_value[cache_line_waiter_index].release(0);
-				}
-
+				// Release our reference via the refcount, not a raw zero — the slot
+				// may be shared with another SPU waiting on the same cache line.
+				deregister_cache_line_waiter(cache_line_waiter_index);
 				return -1;
 			}
 
