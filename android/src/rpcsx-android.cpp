@@ -1840,7 +1840,14 @@ extern "C" bool _rpcsx_initialize(std::string_view rootDir,
   g_cfg_input.player1.device.from_string("Virtual");
   g_cfg_input.save("", g_cfg_input_configs.default_config);
 
-  g_cfg.core.llvm_cpu.from_string("cortex-a34");
+  // Leave the LLVM target CPU empty so the JIT auto-detects the real chip via
+  // our MIDR table (jit_compiler::cpu -> aarch64::get_cpu_name), which picks the
+  // prime/big core (e.g. cortex-a76) and tunes PPU/SPU codegen for it. The old
+  // port hard-coded "cortex-a34" - a tiny in-order ARMv8.0 core - which defeated
+  // that detection and scheduled all generated code for the weakest possible
+  // microarchitecture. Force-clear it (not just default) so devices that already
+  // persisted "cortex-a34" in config.yml get re-detected on next launch.
+  g_cfg.core.llvm_cpu.from_string("");
 
   Emulator::SaveSettings(g_cfg.to_string(), Emu.GetTitleID());
   return true;
