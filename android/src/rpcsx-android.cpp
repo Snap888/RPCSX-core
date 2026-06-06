@@ -1849,6 +1849,11 @@ extern "C" bool _rpcsx_initialize(std::string_view rootDir,
   // persisted "cortex-a34" in config.yml get re-detected on next launch.
   g_cfg.core.llvm_cpu.from_string("");
 
+  // Log the resolved target so every report shows which core codegen was tuned
+  // for (e.g. "cortex-a720"), instead of the empty auto-detect setting.
+  rpcsx_android.notice("LLVM target CPU resolved to: %s",
+                       jit_compiler::cpu(g_cfg.core.llvm_cpu));
+
   Emulator::SaveSettings(g_cfg.to_string(), Emu.GetTitleID());
   return true;
 }
@@ -2796,8 +2801,11 @@ extern "C" bool _rpcsx_customConfigImport(std::string_view serial,
 extern "C" std::string _rpcsx_systemInfo() {
   std::string result;
 
+  // Show the CPU the JIT actually targets (resolved from the empty config via the
+  // MIDR detection), not the raw empty setting, so it's clear which core codegen
+  // is tuned for.
   fmt::append(result, "%s\n\nLLVM CPU: %s\n\n", utils::get_system_info(),
-              fallback_cpu_detection());
+              jit_compiler::cpu(g_cfg.core.llvm_cpu));
 
   {
     vk::instance device_enum_context;

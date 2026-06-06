@@ -277,15 +277,46 @@ namespace aarch64
 #endif
 	}
 
+	// Scheduler-assigned capacity (a DMIPS-derived rating, ~1024 for the prime
+	// core, lower for efficiency cores); 0 if not exposed. Distinguishes big from
+	// LITTLE even on devices where cpufreq is locked down.
+	static u64 read_cpu_capacity([[maybe_unused]] u32 cpu_id)
+	{
+#if defined(__linux__)
+		const std::string path = fmt::format("/sys/devices/system/cpu/cpu%u/cpu_capacity", cpu_id);
+		if (!fs::is_file(path))
+		{
+			return 0;
+		}
+
+		std::string value;
+		if (!fs::file(path, fs::read).read(value, 32))
+		{
+			return 0;
+		}
+		return std::strtoull(value.c_str(), nullptr, 10);
+#else
+		return 0;
+#endif
+	}
+
 	std::string get_cpu_name()
 	{
 		// Heterogeneous (big.LITTLE) SoCs report several core types. Target the
 		// highest-performance one (prime/big): the emulation's hot threads (PPU,
 		// SPU) run there, so the JIT should use that core's scheduling and cost
-		// model. Identify it by max frequency; if cpufreq isn't readable, fall back
-		// to the first reported core.
+		// model. Rank cores by, in order: scheduler capacity (cpu_capacity), then
+		// max frequency, then MIDR part id (within a Cortex generation the bigger
+		// core has the higher part id, e.g. A720=0xd81 > A520=0xd80).
+		//
+		// Earlier code keyed only on max frequency; when cpufreq is not readable
+		// (common on locked-down Android) every core scored 0 and it kept CPU0,
+		// which on modern SoCs is a LITTLE core - so it targeted e.g. Cortex-A520
+		// instead of the Cortex-A720 prime, tuning all codegen for a weak core.
 		u64 best_midr = 0;
+		u64 best_cap = 0;
 		u64 best_freq = 0;
+		u64 best_part = 0;
 		bool found = false;
 
 		for (u32 i = 0; i < std::thread::hardware_concurrency(); ++i)
@@ -300,11 +331,21 @@ namespace aarch64
 				continue;
 			}
 
-			const auto freq = read_max_freq(i);
-			if (!found || freq > best_freq)
+			const u64 cap = read_cpu_capacity(i);
+			const u64 freq = read_max_freq(i);
+			const u64 part = (midr >> 4) & 0xfff;
+
+			const bool better = !found
+				|| cap > best_cap
+				|| (cap == best_cap && freq > best_freq)
+				|| (cap == best_cap && freq == best_freq && part > best_part);
+
+			if (better)
 			{
 				best_midr = midr;
+				best_cap = cap;
 				best_freq = freq;
+				best_part = part;
 				found = true;
 			}
 		}
