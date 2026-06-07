@@ -61,6 +61,7 @@ namespace utils
 	// True if the CPU supports the ARMv8.2 dot product instructions (UDOT/SDOT)
 	bool has_dotprod();
 	bool has_sha3();
+	bool has_i8mm();
 	bool has_sve();
 	bool has_sve2();
 #endif

@@ -202,6 +202,11 @@ void cpu_translator::initialize(llvm::LLVMContext& context, llvm::ExecutionEngin
 	{
 		m_use_dotprod = true;
 	}
+
+	if (utils::has_i8mm())
+	{
+		m_use_i8mm = true;
+	}
 #endif
 }
 
