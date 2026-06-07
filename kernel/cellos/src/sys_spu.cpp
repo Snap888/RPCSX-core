@@ -1336,24 +1336,26 @@ error_code sys_spu_thread_group_terminate(ppu_thread &ppu, u32 id, s32 value) {
   }
 
   u32 prev_resv = 0;
+  u64 prev_time = 0;
 
   for (auto &thread : group->threads) {
     while (thread && group->running && thread->state & cpu_flag::wait) {
       thread_ctrl::notify(*thread);
 
       if (u32 resv = atomic_storage<u32>::load(thread->raddr)) {
-        if (prev_resv && prev_resv != resv) {
+        if (prev_resv && (prev_resv != resv || prev_time != thread->rtime)) {
           // Batch reservation notifications if possible
-          vm::reservation_notifier_notify(prev_resv);
+          vm::reservation_notifier_notify(prev_resv, prev_time);
         }
 
         prev_resv = resv;
+        prev_time = thread->rtime;
       }
     }
   }
 
   if (prev_resv) {
-    vm::reservation_notifier_notify(prev_resv);
+    vm::reservation_notifier_notify(prev_resv, prev_time);
   }
 
   group->exit_status = value;

@@ -66,3 +66,8 @@ rpcs3/git-version.h
 
 log-*.txt
 tty.txt
+
+# build/test artifacts (never commit)
+.claude/
+release-*/
+*.apk
