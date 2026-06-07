@@ -251,7 +251,34 @@ void jit_announce(uptr, usz, std::string_view);
 
 void qt_events_aware_op(int repeat_duration_ms,
                         std::function<bool()> wrapped_op) {
-  /// ?????
+  // The core uses this as its synchronous "wait until done" primitive during
+  // Emu stop/kill (the predicate checks e.g. m_state == stopped). On desktop it
+  // pumps the Qt event loop while polling; on Android there is no such loop on
+  // the calling thread, so just poll the predicate.
+  //
+  // This was previously an empty stub ("/// ?????"), so every synchronous stop
+  // wait returned immediately without actually waiting, letting callers proceed
+  // while emulation teardown was still in flight (shutdown races / ordering bugs).
+  //
+  // These waits run on emulation/background threads (game-side process_exit ->
+  // GracefulShutdown), never the UI thread, so blocking here is safe. A generous
+  // total cap keeps a genuinely stalled teardown from blocking the caller forever
+  // (it then just returns, no worse than the old stub for that pathological case).
+  if (!wrapped_op) {
+    return;
+  }
+
+  constexpr int max_wait_ms = 30'000;
+  const int step_ms = repeat_duration_ms > 0 ? repeat_duration_ms : 1;
+
+  for (int waited_ms = 0; !wrapped_op(); waited_ms += step_ms) {
+    if (waited_ms >= max_wait_ms) {
+      rpcsx_android.error(
+          "qt_events_aware_op: operation did not complete within %dms", max_wait_ms);
+      break;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(step_ms));
+  }
 }
 
 static std::string unwrap(JNIEnv *env, jstring string) {
