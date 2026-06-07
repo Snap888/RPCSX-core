@@ -1918,7 +1918,10 @@ extern "C" bool _rpcsx_surfaceEvent(JNIEnv *env, jobject surface, jint event) {
       ANativeWindow_release(prevWindow);
     }
 
-    if (auto padThread = pad::get_pad_thread()) {
+    // relaxed: the surface can be lost while no pad thread exists (e.g. during
+    // emulation shutdown or before boot); a non-relaxed get_pad_thread() would
+    // ensure()-abort on the null handle and crash the process.
+    if (auto padThread = pad::get_pad_thread(true)) {
       padThread->open_home_menu();
     }
 
