@@ -1106,22 +1106,21 @@ struct ppu_far_jumps_t
 
 #ifdef ARCH_X64
 					c.mov(args[0], x86::rbp);
-					c.mov(x86::dword_ptr(args[0], OFFSET_OF(ppu_thread, cia)), pc);
+					c.mov(args[2], vm::g_base_addr + pc);
 					c.jmp(ppu_far_jump);
 #else
 					Label jmp_address = c.newLabel();
-					Label imm_address = c.newLabel();
+					Label this_op_address = c.newLabel();
 
-					c.ldr(args[1].w(), arm::ptr(imm_address));
-					c.str(args[1].w(), arm::Mem(args[0], OFFSET_OF(ppu_thread, cia)));
+					c.ldr(args[2], arm::ptr(this_op_address));
 					c.ldr(args[1], arm::ptr(jmp_address));
 					c.br(args[1]);
 
 					c.align(AlignMode::kCode, 16);
 					c.bind(jmp_address);
 					c.embedUInt64(reinterpret_cast<u64>(ppu_far_jump));
-					c.bind(imm_address);
-					c.embedUInt32(pc);
+					c.bind(this_op_address);
+					c.embedUInt64(reinterpret_cast<u64>(vm::g_base_addr) + pc);
 #endif
 				},
 				&rt);
@@ -1141,9 +1140,12 @@ u32 ppu_get_far_jump(u32 pc)
 	return g_fxo->get<ppu_far_jumps_t>().get_target(pc);
 }
 
-static void ppu_far_jump(ppu_thread& ppu, ppu_opcode_t, be_t<u32>*, ppu_intrp_func*)
+static void ppu_far_jump(ppu_thread& ppu, ppu_opcode_t, be_t<u32>* this_op, ppu_intrp_func*)
 {
-	const u32 cia = g_fxo->get<ppu_far_jumps_t>().get_target(ppu.cia, &ppu);
+	// Use the actual executing op address, not ppu.cia (which is only updated at
+	// block boundaries) - otherwise a far-jump patched into the middle of a block
+	// resolves the wrong target and the patch does not take effect.
+	const u32 cia = g_fxo->get<ppu_far_jumps_t>().get_target(vm::get_addr(this_op), &ppu);
 
 	if (!vm::check_addr(cia, vm::page_executable))
 	{
