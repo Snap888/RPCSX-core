@@ -2701,10 +2701,20 @@ extern "C" bool _rpcsx_customConfigExists(std::string_view serial) {
 // Create a custom config by snapshotting the current global settings, giving
 // the user a sensible starting point to tweak (RPCS3's "Create Custom
 // Configuration from current settings").
+// fs::pending_file (used by Emulator::SaveSettings) creates its temporary file
+// inside the target directory and fails with "Not found" if that directory does
+// not exist yet. Ensure custom_configs/ is present before saving a per-game
+// config, otherwise the very first per-game/community config write silently
+// fails and nothing is persisted.
+static void ensure_custom_config_dir() {
+  fs::create_path(rpcs3::utils::get_custom_config_dir());
+}
+
 extern "C" bool _rpcsx_customConfigCreate(std::string_view serial) {
   if (serial.empty()) {
     return false;
   }
+  ensure_custom_config_dir();
   Emulator::SaveSettings(g_cfg.to_string(), std::string(serial));
   return _rpcsx_customConfigExists(serial);
 }
@@ -2775,6 +2785,7 @@ extern "C" bool _rpcsx_customConfigSet(std::string_view serial,
     return false;
   }
 
+  ensure_custom_config_dir();
   Emulator::SaveSettings(cfg.to_string(), std::string(serial));
   return true;
 }
@@ -2794,6 +2805,7 @@ extern "C" bool _rpcsx_customConfigImport(std::string_view serial,
     return false;
   }
 
+  ensure_custom_config_dir();
   Emulator::SaveSettings(cfg.to_string(), std::string(serial));
   return _rpcsx_customConfigExists(serial);
 }
