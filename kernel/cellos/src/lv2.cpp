@@ -1618,21 +1618,20 @@ bool lv2_obj::sleep(cpu_thread &cpu, const u64 timeout) {
   if (cpu.get_class() == thread_class::ppu) {
     if (u32 addr = static_cast<ppu_thread &>(cpu).res_notify) {
       static_cast<ppu_thread &>(cpu).res_notify = 0;
+      static_cast<ppu_thread &>(cpu).res_notify_postpone_streak = 0;
 
-      if (static_cast<ppu_thread &>(cpu).res_notify_time !=
-          vm::reservation_notifier_count_index(addr).second) {
-        // Ignore outdated notification request
-      } else if (auto it = std::find(g_to_notify, std::end(g_to_notify),
-                                     std::add_pointer_t<const void>{});
-                 it != std::end(g_to_notify)) {
-        *it++ = vm::reservation_notifier_notify(addr, true);
-
-        if (it < std::end(g_to_notify)) {
-          // Null-terminate the list if it ends before last slot
-          *it = nullptr;
-        }
+      if (auto it = std::find(g_to_notify, std::end(g_to_notify),
+                              std::add_pointer_t<const void>{});
+          it != std::end(g_to_notify)) {
+        if ((*it++ = vm::reservation_notifier_notify(
+                 addr, static_cast<ppu_thread &>(cpu).res_notify_time, true)))
+          if (it < std::end(g_to_notify)) {
+            // Null-terminate the list if it ends before last slot
+            *it = nullptr;
+          }
       } else {
-        vm::reservation_notifier_notify(addr);
+        vm::reservation_notifier_notify(
+            addr, static_cast<ppu_thread &>(cpu).res_notify_time);
       }
     }
   }
@@ -1663,21 +1662,19 @@ bool lv2_obj::awake(cpu_thread *thread, s32 prio) {
   if (ppu_thread *ppu = cpu_thread::get_current<ppu_thread>()) {
     if (u32 addr = ppu->res_notify) {
       ppu->res_notify = 0;
+      ppu->res_notify_postpone_streak = 0;
 
-      if (ppu->res_notify_time !=
-          vm::reservation_notifier_count_index(addr).second) {
-        // Ignore outdated notification request
-      } else if (auto it = std::find(g_to_notify, std::end(g_to_notify),
-                                     std::add_pointer_t<const void>{});
-                 it != std::end(g_to_notify)) {
-        *it++ = vm::reservation_notifier_notify(addr, true);
-
-        if (it < std::end(g_to_notify)) {
-          // Null-terminate the list if it ends before last slot
-          *it = nullptr;
-        }
+      if (auto it = std::find(g_to_notify, std::end(g_to_notify),
+                              std::add_pointer_t<const void>{});
+          it != std::end(g_to_notify)) {
+        if ((*it++ = vm::reservation_notifier_notify(
+                 addr, ppu->res_notify_time, true)))
+          if (it < std::end(g_to_notify)) {
+            // Null-terminate the list if it ends before last slot
+            *it = nullptr;
+          }
       } else {
-        vm::reservation_notifier_notify(addr);
+        vm::reservation_notifier_notify(addr, ppu->res_notify_time);
       }
     }
   }
@@ -2423,16 +2420,9 @@ void lv2_obj::notify_all() noexcept {
     }
 
     if (cpu != &g_to_notify) {
-      const auto res_start = vm::reservation_notifier(0).second;
-      const auto res_end = vm::reservation_notifier(umax).second;
-
-      if (cpu >= res_start && cpu <= res_end) {
-        atomic_wait_engine::notify_all(cpu);
-      } else {
-        // Note: by the time of notification the thread could have been
-        // deallocated which is why the direct function is used
-        atomic_wait_engine::notify_one(cpu);
-      }
+      // Note: by the time of notification the thread could have been
+      // deallocated which is why the direct function is used
+      atomic_wait_engine::notify_all(cpu);
     }
   }
 
@@ -2455,6 +2445,7 @@ void lv2_obj::notify_all() noexcept {
   constexpr usz total_waiters = std::size(spu_thread::g_spu_waiters_by_value);
 
   u32 notifies[total_waiters]{};
+  u64 notifies_time[total_waiters]{};
 
   // There may be 6 waiters, but checking them all may be performance expensive
   // Instead, check 2 at max, but use the CPU ID index to tell which index to
@@ -2486,6 +2477,7 @@ void lv2_obj::notify_all() noexcept {
                   })
                   .second) {
             notifies[i] = raddr;
+            notifies_time[i] = vm::reservation_acquire(raddr);
           }
         }
 
@@ -2512,6 +2504,7 @@ void lv2_obj::notify_all() noexcept {
                 })
                 .second) {
           notifies[i] = raddr;
+          notifies_time[i] = vm::reservation_acquire(raddr);
         }
       }
     }
@@ -2521,9 +2514,11 @@ void lv2_obj::notify_all() noexcept {
     vm::free_range_lock(range_lock);
   }
 
-  for (u32 addr : notifies) {
-    if (addr) {
-      vm::reservation_notifier_notify(addr);
+  for (u32 i = 0; i < total_waiters; i++) {
+    if (notifies[i]) {
+      // Cover all waiters for an address
+      vm::reservation_notifier_notify(notifies[i], notifies_time[i]);
+      vm::reservation_notifier_notify(notifies[i], notifies_time[i] - 128);
     }
   }
 }
