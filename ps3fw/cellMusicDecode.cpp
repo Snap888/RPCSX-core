@@ -198,6 +198,7 @@ error_code cell_music_decode_read(vm::ptr<void> buf, vm::ptr<u32> startTime, u64
 		return CELL_MUSIC_DECODE_ERROR_NO_LPCM_DATA;
 	}
 
+	ensure(dec.decoder.m_size >= dec.read_pos);
 	const u64 size_left = dec.decoder.m_size - dec.read_pos;
 
 	if (dec.read_pos == 0)
@@ -232,7 +233,7 @@ error_code cell_music_decode_read(vm::ptr<void> buf, vm::ptr<u32> startTime, u64
 		return CELL_MUSIC_DECODE_ERROR_NO_LPCM_DATA; // TODO: speculative
 	}
 
-	std::memcpy(buf.get_ptr(), &dec.decoder.data[dec.read_pos], size_to_read);
+	std::memcpy(buf.get_ptr(), &::at32(dec.decoder.data, dec.read_pos), size_to_read);
 
 	if (size_to_read < reqSize)
 	{
