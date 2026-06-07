@@ -7,7 +7,8 @@
 #include "cellPng.h"
 #include "cellPngDec.h"
 
-#if PNG_LIBPNG_VER_MAJOR >= 1 && (PNG_LIBPNG_VER_MINOR < 5 || (PNG_LIBPNG_VER_MINOR == 5 && PNG_LIBPNG_VER_RELEASE < 7))
+#if PNG_LIBPNG_VER_MAJOR >= 1 && (PNG_LIBPNG_VER_MINOR < 5 \
+|| (PNG_LIBPNG_VER_MINOR == 5 && PNG_LIBPNG_VER_RELEASE < 7))
 #define PNG_ERROR_ACTION_NONE 1
 #define PNG_RGB_TO_GRAY_DEFAULT (-1)
 #endif
@@ -18,59 +19,54 @@ typedef png_bytep iCCP_profile_type;
 typedef png_charp iCCP_profile_type;
 #endif
 
-// Temporarily
-#ifndef _MSC_VER
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-#endif
-
 LOG_CHANNEL(cellPngDec);
 
 template <>
 void fmt_class_string<CellPngDecError>::format(std::string& out, u64 arg)
 {
 	format_enum(out, arg, [](CellPngDecError value)
+	{
+		switch (value)
 		{
-			switch (value)
-			{
-				STR_CASE(CELL_PNGDEC_ERROR_HEADER);
-				STR_CASE(CELL_PNGDEC_ERROR_STREAM_FORMAT);
-				STR_CASE(CELL_PNGDEC_ERROR_ARG);
-				STR_CASE(CELL_PNGDEC_ERROR_SEQ);
-				STR_CASE(CELL_PNGDEC_ERROR_BUSY);
-				STR_CASE(CELL_PNGDEC_ERROR_FATAL);
-				STR_CASE(CELL_PNGDEC_ERROR_OPEN_FILE);
-				STR_CASE(CELL_PNGDEC_ERROR_SPU_UNSUPPORT);
-				STR_CASE(CELL_PNGDEC_ERROR_SPU_ERROR);
-				STR_CASE(CELL_PNGDEC_ERROR_CB_PARAM);
-			}
+		STR_CASE(CELL_PNGDEC_ERROR_HEADER);
+		STR_CASE(CELL_PNGDEC_ERROR_STREAM_FORMAT);
+		STR_CASE(CELL_PNGDEC_ERROR_ARG);
+		STR_CASE(CELL_PNGDEC_ERROR_SEQ);
+		STR_CASE(CELL_PNGDEC_ERROR_BUSY);
+		STR_CASE(CELL_PNGDEC_ERROR_FATAL);
+		STR_CASE(CELL_PNGDEC_ERROR_OPEN_FILE);
+		STR_CASE(CELL_PNGDEC_ERROR_SPU_UNSUPPORT);
+		STR_CASE(CELL_PNGDEC_ERROR_SPU_ERROR);
+		STR_CASE(CELL_PNGDEC_ERROR_CB_PARAM);
+		}
 
-			return unknown;
-		});
+		return unknown;
+	});
 }
 
 // cellPngDec aliases to improve readability
-using PPHandle = vm::pptr<PngHandle>;
-using PHandle = vm::ptr<PngHandle>;
-using PThreadInParam = vm::cptr<CellPngDecThreadInParam>;
-using PThreadOutParam = vm::ptr<CellPngDecThreadOutParam>;
-using PExtThreadInParam = vm::cptr<CellPngDecExtThreadInParam>;
+using PPHandle           = vm::pptr<PngHandle>;
+using PHandle            = vm::ptr<PngHandle>;
+using PThreadInParam     = vm::cptr<CellPngDecThreadInParam>;
+using PThreadOutParam    = vm::ptr<CellPngDecThreadOutParam>;
+using PExtThreadInParam  = vm::cptr<CellPngDecExtThreadInParam>;
 using PExtThreadOutParam = vm::ptr<CellPngDecExtThreadOutParam>;
-using PPStream = vm::pptr<PngStream>;
-using PStream = vm::ptr<PngStream>;
-using PSrc = vm::cptr<CellPngDecSrc>;
-using POpenInfo = vm::ptr<CellPngDecOpnInfo>;
-using POpenParam = vm::cptr<CellPngDecOpnParam>;
-using PInfo = vm::ptr<CellPngDecInfo>;
-using PExtInfo = vm::ptr<CellPngDecExtInfo>;
-using PInParam = vm::cptr<CellPngDecInParam>;
-using POutParam = vm::ptr<CellPngDecOutParam>;
-using PExtInParam = vm::cptr<CellPngDecExtInParam>;
-using PExtOutParam = vm::ptr<CellPngDecExtOutParam>;
-using PDataControlParam = vm::cptr<CellPngDecDataCtrlParam>;
-using PDataOutInfo = vm::ptr<CellPngDecDataOutInfo>;
-using PCbControlDisp = vm::cptr<CellPngDecCbCtrlDisp>;
-using PCbControlStream = vm::cptr<CellPngDecCbCtrlStrm>;
-using PDispParam = vm::ptr<CellPngDecDispParam>;
+using PPStream           = vm::pptr<PngStream>;
+using PStream            = vm::ptr<PngStream>;
+using PSrc               = vm::cptr<CellPngDecSrc>;
+using POpenInfo          = vm::ptr<CellPngDecOpnInfo>;
+using POpenParam         = vm::cptr<CellPngDecOpnParam>;
+using PInfo              = vm::ptr<CellPngDecInfo>;
+using PExtInfo           = vm::ptr<CellPngDecExtInfo>;
+using PInParam           = vm::cptr<CellPngDecInParam>;
+using POutParam          = vm::ptr<CellPngDecOutParam>;
+using PExtInParam        = vm::cptr<CellPngDecExtInParam>;
+using PExtOutParam       = vm::ptr<CellPngDecExtOutParam>;
+using PDataControlParam  = vm::cptr<CellPngDecDataCtrlParam>;
+using PDataOutInfo       = vm::ptr<CellPngDecDataOutInfo>;
+using PCbControlDisp     = vm::cptr<CellPngDecCbCtrlDisp>;
+using PCbControlStream   = vm::cptr<CellPngDecCbCtrlStrm>;
+using PDispParam         = vm::ptr<CellPngDecDispParam>;
 
 // Custom read function for libpng, so we could decode images from a buffer
 void pngDecReadBuffer(png_structp png_ptr, png_bytep out, png_size_t length)
@@ -123,15 +119,14 @@ void pngDecRowCallback(png_structp png_ptr, png_bytep new_row, png_uint_32 row_n
 	if (stream->nextRow + stream->outputCounts == row_num)
 		stream->nextRow = row_num;
 
-	if (stream->ppuContext && (stream->nextRow == row_num || pass > 0))
+	if (stream->ppuContext && (stream->nextRow == row_num  || pass > 0))
 	{
-		if (pass > 0)
+		if (pass > 0 )
 		{
 			stream->cbDispInfo->scanPassCount = pass;
 			stream->cbDispInfo->nextOutputStartY = row_num;
 		}
-		else
-		{
+		else {
 			stream->cbDispInfo->scanPassCount = 0;
 			stream->cbDispInfo->nextOutputStartY = 0;
 		}
@@ -149,7 +144,7 @@ void pngDecRowCallback(png_structp png_ptr, png_bytep new_row, png_uint_32 row_n
 	png_progressive_combine_row(png_ptr, data, new_row);
 }
 
-void pngDecInfoCallback(png_structp png_ptr, png_infop info)
+void pngDecInfoCallback(png_structp png_ptr, png_infop /*info*/)
 {
 	PngStream* stream = static_cast<PngStream*>(png_get_progressive_ptr(png_ptr));
 	if (!stream)
@@ -162,7 +157,7 @@ void pngDecInfoCallback(png_structp png_ptr, png_infop info)
 	stream->buffer->cursor += (stream->buffer->length - remaining);
 }
 
-void pngDecEndCallback(png_structp png_ptr, png_infop info)
+void pngDecEndCallback(png_structp png_ptr, png_infop /*info*/)
 {
 	PngStream* stream = static_cast<PngStream*>(png_get_progressive_ptr(png_ptr));
 	if (!stream)
@@ -175,17 +170,17 @@ void pngDecEndCallback(png_structp png_ptr, png_infop info)
 }
 
 // Custom error handler for libpng
-[[noreturn]] void pngDecError(png_structp png_ptr, png_const_charp error_message)
+[[noreturn]] void pngDecError(png_structp /*png_ptr*/, png_const_charp error_message)
 {
-	cellPngDec.error("%s", error_message);
+	cellPngDec.error("pngDecError: %s", error_message);
 	// we can't return here or libpng blows up
 	fmt::throw_exception("Fatal Error in libpng: %s", error_message);
 }
 
 // Custom warning handler for libpng
-void pngDecWarning(png_structp png_ptr, png_const_charp error_message)
+void pngDecWarning(png_structp /*png_ptr*/, png_const_charp error_message)
 {
-	cellPngDec.warning("%s", error_message);
+	cellPngDec.warning("pngDecWarning: %s", error_message);
 }
 
 // Get the chunk information of the PNG file. IDAT is marked as existing, only after decoding or reading the header.
@@ -337,7 +332,7 @@ be_t<u32> pngDecGetChunkInformation(PngStream* stream, bool IDAT = false)
 	return chunk_information;
 }
 
-error_code pngDecCreate(ppu_thread& ppu, PPHandle png_handle, PThreadInParam thread_in_param, PThreadOutParam thread_out_param, PExtThreadInParam extra_thread_in_param = vm::null, PExtThreadOutParam extra_thread_out_param = vm::null)
+error_code pngDecCreate(ppu_thread& ppu, PPHandle png_handle, PThreadInParam thread_in_param, PThreadOutParam thread_out_param, PExtThreadInParam /*extra_thread_in_param*/ = vm::null, PExtThreadOutParam extra_thread_out_param = vm::null)
 {
 	// Check if partial image decoding is used
 	if (extra_thread_out_param)
@@ -621,24 +616,28 @@ error_code pngDecSetParameter(PStream stream, PInParam in_param, POutParam out_p
 
 		// Handle gray<->rgb colorspace conversions
 		// rgb output
-		if (in_param->outputColorSpace == CELL_PNGDEC_ARGB || in_param->outputColorSpace == CELL_PNGDEC_RGBA || in_param->outputColorSpace == CELL_PNGDEC_RGB)
+		if (in_param->outputColorSpace == CELL_PNGDEC_ARGB
+			|| in_param->outputColorSpace == CELL_PNGDEC_RGBA
+			|| in_param->outputColorSpace == CELL_PNGDEC_RGB)
 		{
 
 			if (stream->info.colorSpace == CELL_PNGDEC_PALETTE)
 				png_set_palette_to_rgb(stream->png_ptr);
-			if ((stream->info.colorSpace == CELL_PNGDEC_GRAYSCALE || stream->info.colorSpace == CELL_PNGDEC_GRAYSCALE_ALPHA) && stream->info.bitDepth < 8)
+			if ((stream->info.colorSpace == CELL_PNGDEC_GRAYSCALE || stream->info.colorSpace == CELL_PNGDEC_GRAYSCALE_ALPHA)
+				&& stream->info.bitDepth < 8)
 				png_set_expand_gray_1_2_4_to_8(stream->png_ptr);
 		}
 		// grayscale output
 		else
 		{
-			if (stream->info.colorSpace == CELL_PNGDEC_ARGB || stream->info.colorSpace == CELL_PNGDEC_RGBA || stream->info.colorSpace == CELL_PNGDEC_RGB)
+			if (stream->info.colorSpace == CELL_PNGDEC_ARGB
+				|| stream->info.colorSpace == CELL_PNGDEC_RGBA
+				|| stream->info.colorSpace == CELL_PNGDEC_RGB)
 			{
 
 				png_set_rgb_to_gray(stream->png_ptr, PNG_ERROR_ACTION_NONE, PNG_RGB_TO_GRAY_DEFAULT, PNG_RGB_TO_GRAY_DEFAULT);
 			}
-			else
-			{
+			else {
 				// not sure what to do here
 				cellPngDec.error("Grayscale / Palette to Grayscale / Palette conversion currently unsupported.");
 			}
@@ -776,7 +775,7 @@ error_code pngDecodeData(ppu_thread& ppu, PHandle handle, PStream stream, vm::pt
 				for (u32 i = 0; i < stream->out_param.outputHeight; ++i)
 				{
 					const u32 line = flip ? stream->out_param.outputHeight - i - 1 : i;
-					png_read_row(stream->png_ptr, &data[line * bytes_per_line], nullptr);
+					png_read_row(stream->png_ptr, &data[line*bytes_per_line], nullptr);
 				}
 			}
 			png_read_end(stream->png_ptr, stream->info_ptr);
@@ -904,135 +903,135 @@ error_code cellPngDecExtDecodeData(ppu_thread& ppu, PHandle handle, PStream stre
 
 error_code cellPngDecGetUnknownChunks(PHandle handle, PStream stream, vm::pptr<CellPngUnknownChunk> unknownChunk, vm::ptr<u32> unknownChunkNumber)
 {
-	cellPngDec.todo("cellPngDecGetUnknownChunks()");
+	cellPngDec.todo("cellPngDecGetUnknownChunks(handle=*0x%x, stream=*0x%x, unknownChunk=*0x%x, unknownChunkNumber=*0x%x)", handle, stream, unknownChunk, unknownChunkNumber);
 	return CELL_OK;
 }
 
 error_code cellPngDecGetpCAL(PHandle handle, PStream stream, vm::ptr<CellPngPCAL> pcal)
 {
-	cellPngDec.todo("cellPngDecGetpCAL()");
+	cellPngDec.todo("cellPngDecGetpCAL(handle=*0x%x, stream=*0x%x, pcal=*0x%x)", handle, stream, pcal);
 	return CELL_OK;
 }
 
 error_code cellPngDecGetcHRM(PHandle handle, PStream stream, vm::ptr<CellPngCHRM> chrm)
 {
-	cellPngDec.todo("cellPngDecGetcHRM()");
+	cellPngDec.todo("cellPngDecGetcHRM(handle=*0x%x, stream=*0x%x, chrm=*0x%x)", handle, stream, chrm);
 	return CELL_OK;
 }
 
 error_code cellPngDecGetsCAL(PHandle handle, PStream stream, vm::ptr<CellPngSCAL> scal)
 {
-	cellPngDec.todo("cellPngDecGetsCAL()");
+	cellPngDec.todo("cellPngDecGetsCAL(handle=*0x%x, stream=*0x%x, scal=*0x%x)", handle, stream, scal);
 	return CELL_OK;
 }
 
 error_code cellPngDecGetpHYs(PHandle handle, PStream stream, vm::ptr<CellPngPHYS> phys)
 {
-	cellPngDec.todo("cellPngDecGetpHYs()");
+	cellPngDec.todo("cellPngDecGetpHYs(handle=*0x%x, stream=*0x%x, phys=*0x%x)", handle, stream, phys);
 	return CELL_OK;
 }
 
 error_code cellPngDecGetoFFs(PHandle handle, PStream stream, vm::ptr<CellPngOFFS> offs)
 {
-	cellPngDec.todo("cellPngDecGetoFFs()");
+	cellPngDec.todo("cellPngDecGetoFFs(handle=*0x%x, stream=*0x%x, offs=*0x%x)", handle, stream, offs);
 	return CELL_OK;
 }
 
 error_code cellPngDecGetsPLT(PHandle handle, PStream stream, vm::ptr<CellPngSPLT> splt)
 {
-	cellPngDec.todo("cellPngDecGetsPLT()");
+	cellPngDec.todo("cellPngDecGetsPLT(handle=*0x%x, stream=*0x%x, splt=*0x%x)", handle, stream, splt);
 	return CELL_OK;
 }
 
 error_code cellPngDecGetbKGD(PHandle handle, PStream stream, vm::ptr<CellPngBKGD> bkgd)
 {
-	cellPngDec.todo("cellPngDecGetbKGD()");
+	cellPngDec.todo("cellPngDecGetbKGD(handle=*0x%x, stream=*0x%x, bkgd=*0x%x)", handle, stream, bkgd);
 	return CELL_OK;
 }
 
 error_code cellPngDecGettIME(PHandle handle, PStream stream, vm::ptr<CellPngTIME> time)
 {
-	cellPngDec.todo("cellPngDecGettIME()");
+	cellPngDec.todo("cellPngDecGettIME(handle=*0x%x, stream=*0x%x, time=*0x%x)", handle, stream, time);
 	return CELL_OK;
 }
 
 error_code cellPngDecGethIST(PHandle handle, PStream stream, vm::ptr<CellPngHIST> hist)
 {
-	cellPngDec.todo("cellPngDecGethIST()");
+	cellPngDec.todo("cellPngDecGethIST(handle=*0x%x, stream=*0x%x, hist=*0x%x)", handle, stream, hist);
 	return CELL_OK;
 }
 
 error_code cellPngDecGettRNS(PHandle handle, PStream stream, vm::ptr<CellPngTRNS> trns)
 {
-	cellPngDec.todo("cellPngDecGettRNS()");
+	cellPngDec.todo("cellPngDecGettRNS(handle=*0x%x, stream=*0x%x, trns=*0x%x)", handle, stream, trns);
 	return CELL_OK;
 }
 
 error_code cellPngDecGetsBIT(PHandle handle, PStream stream, vm::ptr<CellPngSBIT> sbit)
 {
-	cellPngDec.todo("cellPngDecGetsBIT()");
+	cellPngDec.todo("cellPngDecGetsBIT(handle=*0x%x, stream=*0x%x, sbit=*0x%x)", handle, stream, sbit);
 	return CELL_OK;
 }
 
 error_code cellPngDecGetiCCP(PHandle handle, PStream stream, vm::ptr<CellPngICCP> iccp)
 {
-	cellPngDec.todo("cellPngDecGetiCCP()");
+	cellPngDec.todo("cellPngDecGetiCCP(handle=*0x%x, stream=*0x%x, iccp=*0x%x)", handle, stream, iccp);
 	return CELL_OK;
 }
 
 error_code cellPngDecGetsRGB(PHandle handle, PStream stream, vm::ptr<CellPngSRGB> srgb)
 {
-	cellPngDec.todo("cellPngDecGetsRGB()");
+	cellPngDec.todo("cellPngDecGetsRGB(handle=*0x%x, stream=*0x%x, srgb=*0x%x)", handle, stream, srgb);
 	return CELL_OK;
 }
 
 error_code cellPngDecGetgAMA(PHandle handle, PStream stream, vm::ptr<CellPngGAMA> gama)
 {
-	cellPngDec.todo("cellPngDecGetgAMA()");
+	cellPngDec.todo("cellPngDecGetgAMA(handle=*0x%x, stream=*0x%x, gama=*0x%x)", handle, stream, gama);
 	return CELL_OK;
 }
 
 error_code cellPngDecGetPLTE(PHandle handle, PStream stream, vm::ptr<CellPngPLTE> plte)
 {
-	cellPngDec.todo("cellPngDecGetPLTE()");
+	cellPngDec.todo("cellPngDecGetPLTE(handle=*0x%x, stream=*0x%x, plte=*0x%x)", handle, stream, plte);
 	return CELL_OK;
 }
 
 error_code cellPngDecGetTextChunk(PHandle handle, PStream stream, vm::ptr<u32> textInfoNum, vm::pptr<CellPngTextInfo> textInfo)
 {
-	cellPngDec.todo("cellPngDecGetTextChunk()");
+	cellPngDec.todo("cellPngDecGetTextChunk(handle=*0x%x, stream=*0x%x, textInfoNum=*0x%x, textInfo=*0x%x)", handle, stream, textInfoNum, textInfo);
 	return CELL_OK;
 }
 
 DECLARE(ppu_module_manager::cellPngDec)("cellPngDec", []()
-	{
-		REG_FUNC(cellPngDec, cellPngDecGetUnknownChunks);
-		REG_FUNC(cellPngDec, cellPngDecClose);
-		REG_FUNC(cellPngDec, cellPngDecGetpCAL);
-		REG_FUNC(cellPngDec, cellPngDecGetcHRM);
-		REG_FUNC(cellPngDec, cellPngDecGetsCAL);
-		REG_FUNC(cellPngDec, cellPngDecGetpHYs);
-		REG_FUNC(cellPngDec, cellPngDecGetoFFs);
-		REG_FUNC(cellPngDec, cellPngDecGetsPLT);
-		REG_FUNC(cellPngDec, cellPngDecGetbKGD);
-		REG_FUNC(cellPngDec, cellPngDecGettIME);
-		REG_FUNC(cellPngDec, cellPngDecGethIST);
-		REG_FUNC(cellPngDec, cellPngDecGettRNS);
-		REG_FUNC(cellPngDec, cellPngDecGetsBIT);
-		REG_FUNC(cellPngDec, cellPngDecGetiCCP);
-		REG_FUNC(cellPngDec, cellPngDecGetsRGB);
-		REG_FUNC(cellPngDec, cellPngDecGetgAMA);
-		REG_FUNC(cellPngDec, cellPngDecGetPLTE);
-		REG_FUNC(cellPngDec, cellPngDecGetTextChunk);
-		REG_FUNC(cellPngDec, cellPngDecDestroy);
-		REG_FUNC(cellPngDec, cellPngDecCreate);
-		REG_FUNC(cellPngDec, cellPngDecExtCreate);
-		REG_FUNC(cellPngDec, cellPngDecExtSetParameter);
-		REG_FUNC(cellPngDec, cellPngDecSetParameter);
-		REG_FUNC(cellPngDec, cellPngDecExtReadHeader);
-		REG_FUNC(cellPngDec, cellPngDecReadHeader);
-		REG_FUNC(cellPngDec, cellPngDecExtOpen);
-		REG_FUNC(cellPngDec, cellPngDecOpen);
-		REG_FUNC(cellPngDec, cellPngDecExtDecodeData);
-		REG_FUNC(cellPngDec, cellPngDecDecodeData);
-	});
+{
+	REG_FUNC(cellPngDec, cellPngDecGetUnknownChunks);
+	REG_FUNC(cellPngDec, cellPngDecClose);
+	REG_FUNC(cellPngDec, cellPngDecGetpCAL);
+	REG_FUNC(cellPngDec, cellPngDecGetcHRM);
+	REG_FUNC(cellPngDec, cellPngDecGetsCAL);
+	REG_FUNC(cellPngDec, cellPngDecGetpHYs);
+	REG_FUNC(cellPngDec, cellPngDecGetoFFs);
+	REG_FUNC(cellPngDec, cellPngDecGetsPLT);
+	REG_FUNC(cellPngDec, cellPngDecGetbKGD);
+	REG_FUNC(cellPngDec, cellPngDecGettIME);
+	REG_FUNC(cellPngDec, cellPngDecGethIST);
+	REG_FUNC(cellPngDec, cellPngDecGettRNS);
+	REG_FUNC(cellPngDec, cellPngDecGetsBIT);
+	REG_FUNC(cellPngDec, cellPngDecGetiCCP);
+	REG_FUNC(cellPngDec, cellPngDecGetsRGB);
+	REG_FUNC(cellPngDec, cellPngDecGetgAMA);
+	REG_FUNC(cellPngDec, cellPngDecGetPLTE);
+	REG_FUNC(cellPngDec, cellPngDecGetTextChunk);
+	REG_FUNC(cellPngDec, cellPngDecDestroy);
+	REG_FUNC(cellPngDec, cellPngDecCreate);
+	REG_FUNC(cellPngDec, cellPngDecExtCreate);
+	REG_FUNC(cellPngDec, cellPngDecExtSetParameter);
+	REG_FUNC(cellPngDec, cellPngDecSetParameter);
+	REG_FUNC(cellPngDec, cellPngDecExtReadHeader);
+	REG_FUNC(cellPngDec, cellPngDecReadHeader);
+	REG_FUNC(cellPngDec, cellPngDecExtOpen);
+	REG_FUNC(cellPngDec, cellPngDecOpen);
+	REG_FUNC(cellPngDec, cellPngDecExtDecodeData);
+	REG_FUNC(cellPngDec, cellPngDecDecodeData);
+});
