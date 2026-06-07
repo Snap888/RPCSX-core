@@ -8,22 +8,22 @@
 
 LOG_CHANNEL(cellScreenshot);
 
-template <>
+template<>
 void fmt_class_string<CellScreenShotError>::format(std::string& out, u64 arg)
 {
 	format_enum(out, arg, [](auto error)
+	{
+		switch (error)
 		{
-			switch (error)
-			{
-				STR_CASE(CELL_SCREENSHOT_ERROR_INTERNAL);
-				STR_CASE(CELL_SCREENSHOT_ERROR_PARAM);
-				STR_CASE(CELL_SCREENSHOT_ERROR_DECODE);
-				STR_CASE(CELL_SCREENSHOT_ERROR_NOSPACE);
-				STR_CASE(CELL_SCREENSHOT_ERROR_UNSUPPORTED_COLOR_FORMAT);
-			}
+			STR_CASE(CELL_SCREENSHOT_ERROR_INTERNAL);
+			STR_CASE(CELL_SCREENSHOT_ERROR_PARAM);
+			STR_CASE(CELL_SCREENSHOT_ERROR_DECODE);
+			STR_CASE(CELL_SCREENSHOT_ERROR_NOSPACE);
+			STR_CASE(CELL_SCREENSHOT_ERROR_UNSUPPORTED_COLOR_FORMAT);
+		}
 
-			return unknown;
-		});
+		return unknown;
+	});
 }
 
 std::string screenshot_info::get_overlay_path() const
@@ -33,18 +33,12 @@ std::string screenshot_info::get_overlay_path() const
 
 std::string screenshot_info::get_photo_title() const
 {
-	std::string photo = photo_title;
-	if (photo.empty())
-		photo = Emu.GetTitle();
-	return photo;
+	return photo_title.empty() ? Emu.GetTitle() : photo_title;
 }
 
 std::string screenshot_info::get_game_title() const
 {
-	std::string game = game_title;
-	if (game.empty())
-		game = Emu.GetTitle();
-	return game;
+	return game_title.empty() ? Emu.GetTitle() : game_title;
 }
 
 std::string screenshot_info::get_game_comment() const
@@ -52,19 +46,6 @@ std::string screenshot_info::get_game_comment() const
 	return game_comment;
 }
 
-std::string screenshot_info::get_screenshot_path(const std::string& date_path) const
-{
-	u32 counter = 0;
-	std::string path = vfs::get("/dev_hdd0/photo/" + date_path + "/" + get_photo_title());
-	std::string suffix = ".png";
-
-	while (!Emu.IsStopped() && fs::is_file(path + suffix))
-	{
-		suffix = fmt::format("_%d.png", ++counter);
-	}
-
-	return path + suffix;
-}
 
 error_code cellScreenShotSetParameter(vm::cptr<CellScreenShotSetParam> param)
 {
@@ -158,13 +139,14 @@ error_code cellScreenShotDisable()
 		cellScreenshot.warning("cellScreenShotDisable(): Disabled");
 	}
 
+
 	return CELL_OK;
 }
 
 DECLARE(ppu_module_manager::cellScreenShot)("cellScreenShotUtility", []()
-	{
-		REG_FUNC(cellScreenShotUtility, cellScreenShotSetParameter);
-		REG_FUNC(cellScreenShotUtility, cellScreenShotSetOverlayImage);
-		REG_FUNC(cellScreenShotUtility, cellScreenShotEnable);
-		REG_FUNC(cellScreenShotUtility, cellScreenShotDisable);
-	});
+{
+	REG_FUNC(cellScreenShotUtility, cellScreenShotSetParameter);
+	REG_FUNC(cellScreenShotUtility, cellScreenShotSetOverlayImage);
+	REG_FUNC(cellScreenShotUtility, cellScreenShotEnable);
+	REG_FUNC(cellScreenShotUtility, cellScreenShotDisable);
+});
