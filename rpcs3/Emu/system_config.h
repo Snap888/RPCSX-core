@@ -148,6 +148,7 @@ struct cfg_root : cfg::node
 #endif
 
 		cfg::_enum<video_resolution> resolution{this, "Resolution", video_resolution::_720p};
+		cfg::_bool stereo_enabled{this, "3D Display Enabled", false};
 		cfg::_enum<video_aspect> aspect_ratio{this, "Aspect ratio", video_aspect::_16_9};
 		cfg::_enum<frame_limit_type> frame_limit{this, "Frame limit", frame_limit_type::_auto, true};
 		cfg::_float<0, 1000> second_frame_limit{this, "Second Frame Limit", 0, true}; // 0 disables its effect
