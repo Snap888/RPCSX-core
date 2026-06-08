@@ -1,6 +1,4 @@
 #include "stdafx.h"
-
-#include "rx/align.hpp"
 #include "Emu/perf_meter.hpp"
 #include "Emu/Cell/PPUModule.h"
 #include "cellos/sys_sync.h"
@@ -23,70 +21,70 @@ template <>
 void fmt_class_string<CellAtracXdecError>::format(std::string& out, u64 arg)
 {
 	format_enum(out, arg, [](CellAtracXdecError value)
+	{
+		switch (value)
 		{
-			switch (value)
-			{
-				STR_CASE(CELL_ADEC_ERROR_ATX_OK); // CELL_ADEC_ERROR_ATX_OFFSET, CELL_ADEC_ERROR_ATX_NONE
-				STR_CASE(CELL_ADEC_ERROR_ATX_BUSY);
-				STR_CASE(CELL_ADEC_ERROR_ATX_EMPTY);
-				STR_CASE(CELL_ADEC_ERROR_ATX_ATSHDR);
-				STR_CASE(CELL_ADEC_ERROR_ATX_NON_FATAL);
-				STR_CASE(CELL_ADEC_ERROR_ATX_NOT_IMPLE);
-				STR_CASE(CELL_ADEC_ERROR_ATX_PACK_CE_OVERFLOW);
-				STR_CASE(CELL_ADEC_ERROR_ATX_ILLEGAL_NPROCQUS);
-				STR_CASE(CELL_ADEC_ERROR_ATX_FATAL);
-				STR_CASE(CELL_ADEC_ERROR_ATX_ENC_OVERFLOW);
-				STR_CASE(CELL_ADEC_ERROR_ATX_PACK_CE_UNDERFLOW);
-				STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_IDCT);
-				STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_GAINADJ);
-				STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_IDSF);
-				STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_SPECTRA);
-				STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_IDWL);
-				STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_GHWAVE);
-				STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_SHEADER);
-				STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_IDWL_A);
-				STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_IDWL_B);
-				STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_IDWL_C);
-				STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_IDWL_D);
-				STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_IDWL_E);
-				STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_IDSF_A);
-				STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_IDSF_B);
-				STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_IDSF_C);
-				STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_IDSF_D);
-				STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_IDCT_A);
-				STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_GC_NGC);
-				STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_GC_IDLEV_A);
-				STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_GC_IDLOC_A);
-				STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_GC_IDLEV_B);
-				STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_GC_IDLOC_B);
-				STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_SN_NWVS);
-				STR_CASE(CELL_ADEC_ERROR_ATX_FATAL_HANDLE);
-				STR_CASE(CELL_ADEC_ERROR_ATX_ASSERT_SAMPLING_FREQ);
-				STR_CASE(CELL_ADEC_ERROR_ATX_ASSERT_CH_CONFIG_INDEX);
-				STR_CASE(CELL_ADEC_ERROR_ATX_ASSERT_NBYTES);
-				STR_CASE(CELL_ADEC_ERROR_ATX_ASSERT_BLOCK_NUM);
-				STR_CASE(CELL_ADEC_ERROR_ATX_ASSERT_BLOCK_ID);
-				STR_CASE(CELL_ADEC_ERROR_ATX_ASSERT_CHANNELS);
-				STR_CASE(CELL_ADEC_ERROR_ATX_UNINIT_BLOCK_SPECIFIED);
-				STR_CASE(CELL_ADEC_ERROR_ATX_POSCFG_PRESENT);
-				STR_CASE(CELL_ADEC_ERROR_ATX_BUFFER_OVERFLOW);
-				STR_CASE(CELL_ADEC_ERROR_ATX_ILL_BLK_TYPE_ID);
-				STR_CASE(CELL_ADEC_ERROR_ATX_UNPACK_CHANNEL_BLK_FAILED);
-				STR_CASE(CELL_ADEC_ERROR_ATX_ILL_BLK_ID_USED_1);
-				STR_CASE(CELL_ADEC_ERROR_ATX_ILL_BLK_ID_USED_2);
-				STR_CASE(CELL_ADEC_ERROR_ATX_ILLEGAL_ENC_SETTING);
-				STR_CASE(CELL_ADEC_ERROR_ATX_ILLEGAL_DEC_SETTING);
-				STR_CASE(CELL_ADEC_ERROR_ATX_ASSERT_NSAMPLES);
-				STR_CASE(CELL_ADEC_ERROR_ATX_ILL_SYNCWORD);
-				STR_CASE(CELL_ADEC_ERROR_ATX_ILL_SAMPLING_FREQ);
-				STR_CASE(CELL_ADEC_ERROR_ATX_ILL_CH_CONFIG_INDEX);
-				STR_CASE(CELL_ADEC_ERROR_ATX_RAW_DATA_FRAME_SIZE_OVER);
-				STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_ENHANCE_LENGTH_OVER);
-				STR_CASE(CELL_ADEC_ERROR_ATX_SPU_INTERNAL_FAIL);
-			}
+		STR_CASE(CELL_ADEC_ERROR_ATX_OK); // CELL_ADEC_ERROR_ATX_OFFSET, CELL_ADEC_ERROR_ATX_NONE
+		STR_CASE(CELL_ADEC_ERROR_ATX_BUSY);
+		STR_CASE(CELL_ADEC_ERROR_ATX_EMPTY);
+		STR_CASE(CELL_ADEC_ERROR_ATX_ATSHDR);
+		STR_CASE(CELL_ADEC_ERROR_ATX_NON_FATAL);
+		STR_CASE(CELL_ADEC_ERROR_ATX_NOT_IMPLE);
+		STR_CASE(CELL_ADEC_ERROR_ATX_PACK_CE_OVERFLOW);
+		STR_CASE(CELL_ADEC_ERROR_ATX_ILLEGAL_NPROCQUS);
+		STR_CASE(CELL_ADEC_ERROR_ATX_FATAL);
+		STR_CASE(CELL_ADEC_ERROR_ATX_ENC_OVERFLOW);
+		STR_CASE(CELL_ADEC_ERROR_ATX_PACK_CE_UNDERFLOW);
+		STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_IDCT);
+		STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_GAINADJ);
+		STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_IDSF);
+		STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_SPECTRA);
+		STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_IDWL);
+		STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_GHWAVE);
+		STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_SHEADER);
+		STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_IDWL_A);
+		STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_IDWL_B);
+		STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_IDWL_C);
+		STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_IDWL_D);
+		STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_IDWL_E);
+		STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_IDSF_A);
+		STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_IDSF_B);
+		STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_IDSF_C);
+		STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_IDSF_D);
+		STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_IDCT_A);
+		STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_GC_NGC);
+		STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_GC_IDLEV_A);
+		STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_GC_IDLOC_A);
+		STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_GC_IDLEV_B);
+		STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_GC_IDLOC_B);
+		STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_SN_NWVS);
+		STR_CASE(CELL_ADEC_ERROR_ATX_FATAL_HANDLE);
+		STR_CASE(CELL_ADEC_ERROR_ATX_ASSERT_SAMPLING_FREQ);
+		STR_CASE(CELL_ADEC_ERROR_ATX_ASSERT_CH_CONFIG_INDEX);
+		STR_CASE(CELL_ADEC_ERROR_ATX_ASSERT_NBYTES);
+		STR_CASE(CELL_ADEC_ERROR_ATX_ASSERT_BLOCK_NUM);
+		STR_CASE(CELL_ADEC_ERROR_ATX_ASSERT_BLOCK_ID);
+		STR_CASE(CELL_ADEC_ERROR_ATX_ASSERT_CHANNELS);
+		STR_CASE(CELL_ADEC_ERROR_ATX_UNINIT_BLOCK_SPECIFIED);
+		STR_CASE(CELL_ADEC_ERROR_ATX_POSCFG_PRESENT);
+		STR_CASE(CELL_ADEC_ERROR_ATX_BUFFER_OVERFLOW);
+		STR_CASE(CELL_ADEC_ERROR_ATX_ILL_BLK_TYPE_ID);
+		STR_CASE(CELL_ADEC_ERROR_ATX_UNPACK_CHANNEL_BLK_FAILED);
+		STR_CASE(CELL_ADEC_ERROR_ATX_ILL_BLK_ID_USED_1);
+		STR_CASE(CELL_ADEC_ERROR_ATX_ILL_BLK_ID_USED_2);
+		STR_CASE(CELL_ADEC_ERROR_ATX_ILLEGAL_ENC_SETTING);
+		STR_CASE(CELL_ADEC_ERROR_ATX_ILLEGAL_DEC_SETTING);
+		STR_CASE(CELL_ADEC_ERROR_ATX_ASSERT_NSAMPLES);
+		STR_CASE(CELL_ADEC_ERROR_ATX_ILL_SYNCWORD);
+		STR_CASE(CELL_ADEC_ERROR_ATX_ILL_SAMPLING_FREQ);
+		STR_CASE(CELL_ADEC_ERROR_ATX_ILL_CH_CONFIG_INDEX);
+		STR_CASE(CELL_ADEC_ERROR_ATX_RAW_DATA_FRAME_SIZE_OVER);
+		STR_CASE(CELL_ADEC_ERROR_ATX_SYNTAX_ENHANCE_LENGTH_OVER);
+		STR_CASE(CELL_ADEC_ERROR_ATX_SPU_INTERNAL_FAIL);
+		}
 
-			return unknown;
-		});
+		return unknown;
+	});
 }
 
 constexpr u32 atracXdecGetSpursMemSize(u32 nch_in)
@@ -113,7 +111,41 @@ void AtracXdecDecoder::alloc_avcodec()
 		fmt::throw_exception("avcodec_find_decoder() failed");
 	}
 
-	ensure(!(codec->capabilities & AV_CODEC_CAP_SUBFRAMES));
+	packet = av_packet_alloc();
+	if (!packet)
+	{
+		fmt::throw_exception("av_packet_alloc() failed");
+	}
+
+	frame = av_frame_alloc();
+	if (!frame)
+	{
+		fmt::throw_exception("av_frame_alloc() failed");
+	}
+}
+
+void AtracXdecDecoder::free_avcodec()
+{
+	if (packet)
+	{
+		av_packet_free(&packet);
+	}
+	if (frame)
+	{
+		av_frame_free(&frame);
+	}
+	if (ctx)
+	{
+		avcodec_free_context(&ctx);
+	}
+}
+
+void AtracXdecDecoder::init_avcodec()
+{
+	if (ctx)
+	{
+		avcodec_free_context(&ctx);
+	}
 
 	ctx = avcodec_alloc_context3(codec);
 	if (!ctx)
@@ -132,37 +164,9 @@ void AtracXdecDecoder::alloc_avcodec()
 			frame->linesize[i] = ATXDEC_SAMPLES_PER_FRAME * sizeof(f32);
 		}
 
-		frame->buf[0] = av_buffer_create(frame->data[0], ATXDEC_SAMPLES_PER_FRAME * sizeof(f32) * frame->ch_layout.nb_channels, [](void*, uint8_t*) {}, nullptr, 0);
+		frame->buf[0] = av_buffer_create(frame->data[0], ATXDEC_SAMPLES_PER_FRAME * sizeof(f32) * frame->ch_layout.nb_channels, [](void*, uint8_t*){}, nullptr, 0);
 		return 0;
 	};
-
-	packet = av_packet_alloc();
-	if (!packet)
-	{
-		fmt::throw_exception("av_packet_alloc() failed");
-	}
-
-	frame = av_frame_alloc();
-	if (!frame)
-	{
-		fmt::throw_exception("av_frame_alloc() failed");
-	}
-}
-
-void AtracXdecDecoder::free_avcodec()
-{
-	av_packet_free(&packet);
-	av_frame_free(&frame);
-	avcodec_free_context(&ctx);
-}
-
-void AtracXdecDecoder::init_avcodec()
-{
-	if (int err = avcodec_close(ctx); err)
-	{
-		fmt::throw_exception("avcodec_close() failed (err=0x%x='%s')", err, utils::av_error_to_string(err));
-	}
-
 	ctx->block_align = nbytes;
 	ctx->ch_layout.nb_channels = nch_in;
 	ctx->sample_rate = sampling_freq;
@@ -174,7 +178,7 @@ void AtracXdecDecoder::init_avcodec()
 
 	packet->data = work_mem.get_ptr();
 	packet->size = nbytes;
-	packet->buf = av_buffer_create(work_mem.get_ptr(), nbytes, [](void*, uint8_t*) {}, nullptr, 0);
+	packet->buf = av_buffer_create(work_mem.get_ptr(), nbytes, [](void*, uint8_t*){}, nullptr, 0);
 }
 
 error_code AtracXdecDecoder::set_config_info(u32 sampling_freq, u32 ch_config_idx, u32 nbytes)
@@ -184,13 +188,13 @@ error_code AtracXdecDecoder::set_config_info(u32 sampling_freq, u32 ch_config_id
 	this->sampling_freq = sampling_freq;
 	this->ch_config_idx = ch_config_idx;
 	this->nbytes = nbytes;
-	this->nbytes_128_aligned = rx::alignUp(nbytes, 0x80);
+	this->nbytes_128_aligned = rx::align(nbytes, 0x80);
 	this->nch_in = ch_config_idx <= 4 ? ch_config_idx : ch_config_idx + 1;
 
 	if (ch_config_idx > 7u)
 	{
 		this->config_is_set = false;
-		return {0x80004005, "AtracXdecDecoder::set_config_info() failed: Invalid channel configuration: %d", ch_config_idx};
+		return { 0x80004005, "AtracXdecDecoder::set_config_info() failed: Invalid channel configuration: %d", ch_config_idx };
 	}
 
 	this->nch_blocks = ATXDEC_NCH_BLOCKS_MAP[ch_config_idx];
@@ -199,19 +203,19 @@ error_code AtracXdecDecoder::set_config_info(u32 sampling_freq, u32 ch_config_id
 	if (ch_config_idx == 0u)
 	{
 		this->config_is_set = false;
-		return {0x80004005, "AtracXdecDecoder::set_config_info() failed: Invalid channel configuration: %d", ch_config_idx};
+		return { 0x80004005, "AtracXdecDecoder::set_config_info() failed: Invalid channel configuration: %d", ch_config_idx };
 	}
 
 	if (sampling_freq != 48000u && sampling_freq != 44100u) // 32kHz is not supported, even though official docs claim it is
 	{
 		this->config_is_set = false;
-		return {0x80004005, "AtracXdecDecoder::set_config_info() failed: Invalid sample rate: %d", sampling_freq};
+		return { 0x80004005, "AtracXdecDecoder::set_config_info() failed: Invalid sample rate: %d", sampling_freq };
 	}
 
 	if (nbytes == 0u || nbytes > ATXDEC_MAX_FRAME_LENGTH)
 	{
 		this->config_is_set = false;
-		return {0x80004005, "AtracXdecDecoder::set_config_info() failed: Invalid frame length: 0x%x", nbytes};
+		return { 0x80004005, "AtracXdecDecoder::set_config_info() failed: Invalid frame length: 0x%x", nbytes };
 	}
 
 	this->config_is_set = true;
@@ -222,7 +226,7 @@ error_code AtracXdecDecoder::init_decode(u32 bw_pcm, u32 nch_out)
 {
 	if (bw_pcm < CELL_ADEC_ATRACX_WORD_SZ_16BIT || (bw_pcm > CELL_ADEC_ATRACX_WORD_SZ_32BIT && bw_pcm != CELL_ADEC_ATRACX_WORD_SZ_FLOAT))
 	{
-		return {0x80004005, "AtracXdecDecoder::init_decode() failed: Invalid PCM output format"};
+		return { 0x80004005, "AtracXdecDecoder::init_decode() failed: Invalid PCM output format" };
 	}
 
 	this->bw_pcm = bw_pcm;
@@ -239,7 +243,7 @@ error_code AtracXdecDecoder::parse_ats_header(vm::cptr<u8> au_start_addr)
 
 	if (ats.sync_word != 0x0fd0)
 	{
-		return {CELL_ADEC_ERROR_ATX_ATSHDR, "AtracXdecDecoder::parse_ats_header() failed: Invalid sync word: 0x%x", ats.sync_word};
+		return { CELL_ADEC_ERROR_ATX_ATSHDR, "AtracXdecDecoder::parse_ats_header() failed: Invalid sync word: 0x%x", ats.sync_word };
 	}
 
 	const u8 sample_rate_idx = ats.params >> 13;
@@ -248,7 +252,7 @@ error_code AtracXdecDecoder::parse_ats_header(vm::cptr<u8> au_start_addr)
 
 	if (ch_config_idx == 0u)
 	{
-		return {CELL_ADEC_ERROR_ATX_ATSHDR, "AtracXdecDecoder::parse_ats_header() failed: Invalid channel configuration: %d", ch_config_idx};
+		return { CELL_ADEC_ERROR_ATX_ATSHDR, "AtracXdecDecoder::parse_ats_header() failed: Invalid channel configuration: %d", ch_config_idx };
 	}
 
 	u32 sampling_freq;
@@ -256,7 +260,7 @@ error_code AtracXdecDecoder::parse_ats_header(vm::cptr<u8> au_start_addr)
 	{
 	case 1: sampling_freq = 44100; break;
 	case 2: sampling_freq = 48000; break;
-	default: return {CELL_ADEC_ERROR_ATX_ATSHDR, "AtracXdecDecoder::parse_ats_header() failed: Invalid sample rate index: %d", sample_rate_idx};
+	default: return { CELL_ADEC_ERROR_ATX_ATSHDR, "AtracXdecDecoder::parse_ats_header() failed: Invalid sample rate index: %d", sample_rate_idx };
 	}
 
 	return set_config_info(sampling_freq, ch_config_idx, nbytes); // Cannot return error here, values were already checked
@@ -283,7 +287,7 @@ void AtracXdecContext::exec(ppu_thread& ppu)
 	case atracxdec_state::decoding: goto label6_decode_state;
 	}
 
-	for (;; cmd_counter++)
+	for (;;cmd_counter++)
 	{
 		cellAtracXdec.trace("Command counter: %llu, waiting for next command...", cmd_counter);
 
@@ -291,7 +295,7 @@ void AtracXdecContext::exec(ppu_thread& ppu)
 		{
 			savestate = atracxdec_state::initial;
 
-			ensure(sys_mutex_lock(ppu, queue_mutex, 0) == CELL_OK);
+			ensure(lv2_syscall<sys_mutex_lock>(ppu, queue_mutex, 0) == CELL_OK);
 
 			if (ppu.state & cpu_flag::again)
 			{
@@ -304,26 +308,26 @@ void AtracXdecContext::exec(ppu_thread& ppu)
 			}
 
 			savestate = atracxdec_state::waiting_for_cmd;
-		label1_wait_for_cmd_state:
+			label1_wait_for_cmd_state:
 
-			ensure(sys_cond_wait(ppu, queue_not_empty, 0) == CELL_OK);
+			ensure(lv2_syscall<sys_cond_wait>(ppu, queue_not_empty, 0) == CELL_OK);
 
 			if (ppu.state & cpu_flag::again)
 			{
 				return;
 			}
 
-			ensure(sys_mutex_unlock(ppu, queue_mutex) == CELL_OK);
+			ensure(lv2_syscall<sys_mutex_unlock>(ppu, queue_mutex) == CELL_OK);
 		}
 
 		cmd_queue.pop(cmd);
 
-		ensure(sys_mutex_unlock(ppu, queue_mutex) == CELL_OK);
+		ensure(lv2_syscall<sys_mutex_unlock>(ppu, queue_mutex) == CELL_OK);
 
 		savestate = atracxdec_state::checking_run_thread_1;
-	label2_check_run_thread_1_state:
+		label2_check_run_thread_1_state:
 
-		ensure(sys_mutex_lock(ppu, run_thread_mutex, 0) == CELL_OK);
+		ensure(lv2_syscall<sys_mutex_lock>(ppu, run_thread_mutex, 0) == CELL_OK);
 
 		if (ppu.state & cpu_flag::again)
 		{
@@ -332,14 +336,14 @@ void AtracXdecContext::exec(ppu_thread& ppu)
 
 		if (!run_thread)
 		{
-			ensure(sys_mutex_unlock(ppu, run_thread_mutex) == CELL_OK);
+			ensure(lv2_syscall<sys_mutex_unlock>(ppu, run_thread_mutex) == CELL_OK);
 			return;
 		}
 
-		ensure(sys_mutex_unlock(ppu, run_thread_mutex) == CELL_OK);
+		ensure(lv2_syscall<sys_mutex_unlock>(ppu, run_thread_mutex) == CELL_OK);
 
 		savestate = atracxdec_state::executing_cmd;
-	label3_execute_cmd_state:
+		label3_execute_cmd_state:
 
 		cellAtracXdec.trace("Command type: %d", static_cast<u32>(cmd.type.get()));
 
@@ -388,7 +392,7 @@ void AtracXdecContext::exec(ppu_thread& ppu)
 
 			cellAtracXdec.trace("Waiting for output to be consumed...");
 
-			ensure(sys_mutex_lock(ppu, output_mutex, 0) == CELL_OK);
+			ensure(lv2_syscall<sys_mutex_lock>(ppu, output_mutex, 0) == CELL_OK);
 
 			if (ppu.state & cpu_flag::again)
 			{
@@ -398,9 +402,9 @@ void AtracXdecContext::exec(ppu_thread& ppu)
 			while (output_locked)
 			{
 				savestate = atracxdec_state::waiting_for_output;
-			label4_wait_for_output_state:
+				label4_wait_for_output_state:
 
-				ensure(sys_cond_wait(ppu, output_consumed, 0) == CELL_OK);
+				ensure(lv2_syscall<sys_cond_wait>(ppu, output_consumed, 0) == CELL_OK);
 
 				if (ppu.state & cpu_flag::again)
 				{
@@ -411,9 +415,9 @@ void AtracXdecContext::exec(ppu_thread& ppu)
 			cellAtracXdec.trace("Output consumed");
 
 			savestate = atracxdec_state::checking_run_thread_2;
-		label5_check_run_thread_2_state:
+			label5_check_run_thread_2_state:
 
-			ensure(sys_mutex_lock(ppu, run_thread_mutex, 0) == CELL_OK);
+			ensure(lv2_syscall<sys_mutex_lock>(ppu, run_thread_mutex, 0) == CELL_OK);
 
 			if (ppu.state & cpu_flag::again)
 			{
@@ -422,15 +426,15 @@ void AtracXdecContext::exec(ppu_thread& ppu)
 
 			if (!run_thread)
 			{
-				ensure(sys_mutex_unlock(ppu, run_thread_mutex) == CELL_OK);
-				ensure(sys_mutex_unlock(ppu, output_mutex) == CELL_OK);
+				ensure(lv2_syscall<sys_mutex_unlock>(ppu, run_thread_mutex) == CELL_OK);
+				ensure(lv2_syscall<sys_mutex_unlock>(ppu, output_mutex) == CELL_OK);
 				return;
 			}
 
-			ensure(sys_mutex_unlock(ppu, run_thread_mutex) == CELL_OK);
+			ensure(lv2_syscall<sys_mutex_unlock>(ppu, run_thread_mutex) == CELL_OK);
 
 			savestate = atracxdec_state::decoding;
-		label6_decode_state:
+			label6_decode_state:
 
 			u32 error = CELL_OK;
 
@@ -641,11 +645,11 @@ void AtracXdecContext::exec(ppu_thread& ppu)
 			notify_au_done.cbFunc(ppu, cmd.pcm_handle, notify_au_done.cbArg);
 
 			output_locked = true;
-			ensure(sys_mutex_unlock(ppu, output_mutex) == CELL_OK);
+			ensure(lv2_syscall<sys_mutex_unlock>(ppu, output_mutex) == CELL_OK);
 
 			const u32 output_size = decoded_samples_num * (decoder.bw_pcm & 0x7fu) * decoder.nch_out;
 
-			const vm::var<CellAdecAtracXInfo> bsi_info{{decoder.sampling_freq, decoder.ch_config_idx, decoder.nbytes}};
+			const vm::var<CellAdecAtracXInfo> bsi_info{{ decoder.sampling_freq, decoder.ch_config_idx, decoder.nbytes }};
 
 			const AdecCorrectPtsValueType correct_pts_type = [&]
 			{
@@ -654,7 +658,7 @@ void AtracXdecContext::exec(ppu_thread& ppu)
 				case 32000u: return ADEC_CORRECT_PTS_VALUE_TYPE_ATRACX_32000Hz;
 				case 44100u: return ADEC_CORRECT_PTS_VALUE_TYPE_ATRACX_44100Hz;
 				case 48000u: return ADEC_CORRECT_PTS_VALUE_TYPE_ATRACX_48000Hz;
-				default: return ADEC_CORRECT_PTS_VALUE_TYPE_UNSPECIFIED;
+				default:     return ADEC_CORRECT_PTS_VALUE_TYPE_UNSPECIFIED;
 				}
 			}();
 
@@ -676,7 +680,7 @@ error_code AtracXdecContext::send_command(ppu_thread& ppu, auto&&... args)
 
 	if (!signal)
 	{
-		ensure(sys_mutex_lock(ppu, queue_mutex, 0) == CELL_OK);
+		ensure(lv2_syscall<sys_mutex_lock>(ppu, queue_mutex, 0) == CELL_OK);
 
 		if (ppu.state & cpu_flag::again)
 		{
@@ -688,23 +692,23 @@ error_code AtracXdecContext::send_command(ppu_thread& ppu, auto&&... args)
 			// Close command is only sent if the queue is empty on LLE
 			if (!cmd_queue.empty())
 			{
-				ensure(sys_mutex_unlock(ppu, queue_mutex) == CELL_OK);
+				ensure(lv2_syscall<sys_mutex_unlock>(ppu, queue_mutex) == CELL_OK);
 				return {};
 			}
 		}
 
 		if (cmd_queue.full())
 		{
-			ensure(sys_mutex_unlock(ppu, queue_mutex) == CELL_OK);
+			ensure(lv2_syscall<sys_mutex_unlock>(ppu, queue_mutex) == CELL_OK);
 			return CELL_ADEC_ERROR_ATX_BUSY;
 		}
 
 		cmd_queue.emplace(std::forward<AtracXdecCmdType>(type), std::forward<decltype(args)>(args)...);
 
-		ensure(sys_mutex_unlock(ppu, queue_mutex) == CELL_OK);
+		ensure(lv2_syscall<sys_mutex_unlock>(ppu, queue_mutex) == CELL_OK);
 	}
 
-	ensure(sys_cond_signal(ppu, queue_not_empty) == CELL_OK);
+	ensure(lv2_syscall<sys_cond_signal>(ppu, queue_not_empty) == CELL_OK);
 
 	if (ppu.state & cpu_flag::again)
 	{
@@ -741,9 +745,12 @@ error_code _CellAdecCoreOpGetMemSize_atracx(vm::ptr<CellAdecAttr> attr)
 	ensure(!!attr); // Not checked on LLE
 
 	constexpr u32 mem_size =
-		sizeof(AtracXdecContext) + 0x7f + ATXDEC_SPURS_STRUCTS_SIZE + 0x1d8 + atracXdecGetSpursMemSize(nch_in) + ATXDEC_SAMPLES_PER_FRAME * sizeof(f32) * nch_in;
+		sizeof(AtracXdecContext) + 0x7f
+		+ ATXDEC_SPURS_STRUCTS_SIZE + 0x1d8
+		+ atracXdecGetSpursMemSize(nch_in)
+		+ ATXDEC_SAMPLES_PER_FRAME * sizeof(f32) * nch_in;
 
-	attr->workMemSize = rx::alignUp(mem_size, 0x80);
+	attr->workMemSize = rx::align(mem_size, 0x80);
 
 	return CELL_OK;
 }
@@ -762,35 +769,35 @@ error_code _CellAdecCoreOpOpenExt_atracx(ppu_thread& ppu, vm::ptr<AtracXdecConte
 	cellAtracXdec.notice("_CellAdecCoreOpOpenExt_atracx(handle=*0x%x, notifyAuDone=*0x%x, notifyAuDoneArg=*0x%x, notifyPcmOut=*0x%x, notifyPcmOutArg=*0x%x, notifyError=*0x%x, notifyErrorArg=*0x%x, notifySeqDone=*0x%x, notifySeqDoneArg=*0x%x, res=*0x%x, spursRes=*0x%x)",
 		handle, notifyAuDone, notifyAuDoneArg, notifyPcmOut, notifyPcmOutArg, notifyError, notifyErrorArg, notifySeqDone, notifySeqDoneArg, res, spursRes);
 
-	ensure(!!handle && !!res);                                                                                                                                        // Not checked on LLE
-	ensure(handle.aligned(0x80));                                                                                                                                     // On LLE, this functions doesn't check the alignment or aligns the address itself. The address should already be aligned to 128 bytes by cellAdec
+	ensure(!!handle && !!res); // Not checked on LLE
+	ensure(handle.aligned(0x80)); // On LLE, this functions doesn't check the alignment or aligns the address itself. The address should already be aligned to 128 bytes by cellAdec
 	ensure(!!notifyAuDone && !!notifyAuDoneArg && !!notifyPcmOut && !!notifyPcmOutArg && !!notifyError && !!notifyErrorArg && !!notifySeqDone && !!notifySeqDoneArg); // These should always be set by cellAdec
 
 	write_to_ptr(handle.get_ptr(), AtracXdecContext(notifyAuDone, notifyAuDoneArg, notifyPcmOut, notifyPcmOutArg, notifyError, notifyErrorArg, notifySeqDone, notifySeqDoneArg,
-									   vm::bptr<u8>::make(handle.addr() + rx::alignUp(static_cast<u32>(sizeof(AtracXdecContext)), 0x80) + ATXDEC_SPURS_STRUCTS_SIZE)));
+		vm::bptr<u8>::make(handle.addr() + rx::align(static_cast<u32>(sizeof(AtracXdecContext)), 0x80) + ATXDEC_SPURS_STRUCTS_SIZE)));
 
-	const vm::var<sys_mutex_attribute_t> mutex_attr{{SYS_SYNC_PRIORITY, SYS_SYNC_NOT_RECURSIVE, SYS_SYNC_NOT_PROCESS_SHARED, SYS_SYNC_NOT_ADAPTIVE, 0, 0, 0, {"_atd001"_u64}}};
-	const vm::var<sys_cond_attribute_t> cond_attr{{SYS_SYNC_NOT_PROCESS_SHARED, 0, 0, {"_atd002"_u64}}};
+	const vm::var<sys_mutex_attribute_t> mutex_attr{{ SYS_SYNC_PRIORITY, SYS_SYNC_NOT_RECURSIVE, SYS_SYNC_NOT_PROCESS_SHARED, SYS_SYNC_NOT_ADAPTIVE, 0, 0, 0, { "_atd001"_u64 } }};
+	const vm::var<sys_cond_attribute_t> cond_attr{{ SYS_SYNC_NOT_PROCESS_SHARED, 0, 0, { "_atd002"_u64 } }};
 
-	ensure(sys_mutex_create(ppu, handle.ptr(&AtracXdecContext::queue_mutex), mutex_attr) == CELL_OK);
-	ensure(sys_cond_create(ppu, handle.ptr(&AtracXdecContext::queue_not_empty), handle->queue_mutex, cond_attr) == CELL_OK);
+	ensure(lv2_syscall<sys_mutex_create>(ppu, handle.ptr(&AtracXdecContext::queue_mutex), mutex_attr) == CELL_OK);
+	ensure(lv2_syscall<sys_cond_create>(ppu, handle.ptr(&AtracXdecContext::queue_not_empty), handle->queue_mutex, cond_attr) == CELL_OK);
 
 	mutex_attr->name_u64 = "_atd003"_u64;
 	cond_attr->name_u64 = "_atd004"_u64;
 
-	ensure(sys_mutex_create(ppu, handle.ptr(&AtracXdecContext::run_thread_mutex), mutex_attr) == CELL_OK);
-	ensure(sys_cond_create(ppu, handle.ptr(&AtracXdecContext::run_thread_cond), handle->run_thread_mutex, cond_attr) == CELL_OK);
+	ensure(lv2_syscall<sys_mutex_create>(ppu, handle.ptr(&AtracXdecContext::run_thread_mutex), mutex_attr) == CELL_OK);
+	ensure(lv2_syscall<sys_cond_create>(ppu, handle.ptr(&AtracXdecContext::run_thread_cond), handle->run_thread_mutex, cond_attr) == CELL_OK);
 
 	mutex_attr->name_u64 = "_atd005"_u64;
 	cond_attr->name_u64 = "_atd006"_u64;
 
-	ensure(sys_mutex_create(ppu, handle.ptr(&AtracXdecContext::output_mutex), mutex_attr) == CELL_OK);
-	ensure(sys_cond_create(ppu, handle.ptr(&AtracXdecContext::output_consumed), handle->output_mutex, cond_attr) == CELL_OK);
+	ensure(lv2_syscall<sys_mutex_create>(ppu, handle.ptr(&AtracXdecContext::output_mutex), mutex_attr) == CELL_OK);
+	ensure(lv2_syscall<sys_cond_create>(ppu, handle.ptr(&AtracXdecContext::output_consumed), handle->output_mutex, cond_attr) == CELL_OK);
 
-	ensure(sys_mutex_lock(ppu, handle->output_mutex, 0) == CELL_OK);
+	ensure(lv2_syscall<sys_mutex_lock>(ppu, handle->output_mutex, 0) == CELL_OK);
 	handle->output_locked = false;
-	ensure(sys_cond_signal(ppu, handle->output_consumed) == CELL_OK);
-	ensure(sys_mutex_unlock(ppu, handle->output_mutex) == CELL_OK);
+	ensure(lv2_syscall<sys_cond_signal>(ppu, handle->output_consumed) == CELL_OK);
+	ensure(lv2_syscall<sys_mutex_unlock>(ppu, handle->output_mutex) == CELL_OK);
 
 	const vm::var<char[]> _name = vm::make_str("HLE ATRAC3plus decoder");
 	const auto entry = g_fxo->get<ppu_function_manager>().func_addr(FIND_FUNC(atracXdecEntry));
@@ -822,26 +829,26 @@ error_code _CellAdecCoreOpClose_atracx(ppu_thread& ppu, vm::ptr<AtracXdecContext
 
 	ensure(!!handle); // Not checked on LLE
 
-	ensure(sys_mutex_lock(ppu, handle->run_thread_mutex, 0) == CELL_OK);
+	ensure(lv2_syscall<sys_mutex_lock>(ppu, handle->run_thread_mutex, 0) == CELL_OK);
 	handle->run_thread = false;
-	ensure(sys_mutex_unlock(ppu, handle->run_thread_mutex) == CELL_OK);
+	ensure(lv2_syscall<sys_mutex_unlock>(ppu, handle->run_thread_mutex) == CELL_OK);
 
 	handle->send_command<AtracXdecCmdType::close>(ppu);
 
-	ensure(sys_mutex_lock(ppu, handle->output_mutex, 0) == CELL_OK);
+	ensure(lv2_syscall<sys_mutex_lock>(ppu, handle->output_mutex, 0) == CELL_OK);
 	handle->output_locked = false;
-	ensure(sys_mutex_unlock(ppu, handle->output_mutex) == CELL_OK);
-	ensure(sys_cond_signal(ppu, handle->output_consumed) == CELL_OK);
+	ensure(lv2_syscall<sys_mutex_unlock>(ppu, handle->output_mutex) == CELL_OK);
+	ensure(lv2_syscall<sys_cond_signal>(ppu, handle->output_consumed) == CELL_OK);
 
 	vm::var<u64> thread_ret;
-	ensure(sys_ppu_thread_join(ppu, static_cast<u32>(handle->thread_id), +thread_ret) == CELL_OK);
+	ensure(lv2_syscall<sys_ppu_thread_join>(ppu, static_cast<u32>(handle->thread_id), +thread_ret) == CELL_OK);
 
-	error_code ret = sys_cond_destroy(ppu, handle->queue_not_empty);
-	ret = ret ? ret : sys_cond_destroy(ppu, handle->run_thread_cond);
-	ret = ret ? ret : sys_cond_destroy(ppu, handle->output_consumed);
-	ret = ret ? ret : sys_mutex_destroy(ppu, handle->queue_mutex);
-	ret = ret ? ret : sys_mutex_destroy(ppu, handle->run_thread_mutex);
-	ret = ret ? ret : sys_mutex_destroy(ppu, handle->output_mutex);
+	error_code ret = lv2_syscall<sys_cond_destroy>(ppu, handle->queue_not_empty);
+	ret = ret ? ret : lv2_syscall<sys_cond_destroy>(ppu, handle->run_thread_cond);
+	ret = ret ? ret : lv2_syscall<sys_cond_destroy>(ppu, handle->output_consumed);
+	ret = ret ? ret : lv2_syscall<sys_mutex_destroy>(ppu, handle->queue_mutex);
+	ret = ret ? ret : lv2_syscall<sys_mutex_destroy>(ppu, handle->run_thread_mutex);
+	ret = ret ? ret : lv2_syscall<sys_mutex_destroy>(ppu, handle->output_mutex);
 
 	return ret != CELL_OK ? static_cast<error_code>(CELL_ADEC_ERROR_FATAL) : CELL_OK;
 }
@@ -914,7 +921,7 @@ error_code _CellAdecCoreOpReleasePcm_atracx(ppu_thread& ppu, vm::ptr<AtracXdecCo
 
 	if (!signal)
 	{
-		ensure(sys_mutex_lock(ppu, handle->output_mutex, 0) == CELL_OK);
+		ensure(lv2_syscall<sys_mutex_lock>(ppu, handle->output_mutex, 0) == CELL_OK);
 
 		if (ppu.state & cpu_flag::again)
 		{
@@ -924,7 +931,7 @@ error_code _CellAdecCoreOpReleasePcm_atracx(ppu_thread& ppu, vm::ptr<AtracXdecCo
 		handle->output_locked = false;
 	}
 
-	ensure(sys_cond_signal(ppu, handle->output_consumed) == CELL_OK);
+	ensure(lv2_syscall<sys_cond_signal>(ppu, handle->output_consumed) == CELL_OK);
 
 	if (ppu.state & cpu_flag::again)
 	{
@@ -932,7 +939,7 @@ error_code _CellAdecCoreOpReleasePcm_atracx(ppu_thread& ppu, vm::ptr<AtracXdecCo
 		return {};
 	}
 
-	ensure(sys_mutex_unlock(ppu, handle->output_mutex) == CELL_OK);
+	ensure(lv2_syscall<sys_mutex_unlock>(ppu, handle->output_mutex) == CELL_OK);
 
 	return CELL_OK;
 }
@@ -967,42 +974,42 @@ static void init_gvar(vm::gvar<CellAdecCoreOps>& var)
 }
 
 DECLARE(ppu_module_manager::cellAtracXdec)("cellAtracXdec", []()
+{
+	REG_VNID(cellAtracXdec, 0x076b33ab, g_cell_adec_core_ops_atracx2ch).init = []()
 	{
-		REG_VNID(cellAtracXdec, 0x076b33ab, g_cell_adec_core_ops_atracx2ch).init = []()
-		{
-			g_cell_adec_core_ops_atracx2ch->getMemSize.set(g_fxo->get<ppu_function_manager>().func_addr(FIND_FUNC(_CellAdecCoreOpGetMemSize_atracx<2>)));
-			init_gvar(g_cell_adec_core_ops_atracx2ch);
-		};
-		REG_VNID(cellAtracXdec, 0x1d210eaa, g_cell_adec_core_ops_atracx6ch).init = []()
-		{
-			g_cell_adec_core_ops_atracx6ch->getMemSize.set(g_fxo->get<ppu_function_manager>().func_addr(FIND_FUNC(_CellAdecCoreOpGetMemSize_atracx<6>)));
-			init_gvar(g_cell_adec_core_ops_atracx6ch);
-		};
-		REG_VNID(cellAtracXdec, 0xe9a86e54, g_cell_adec_core_ops_atracx8ch).init = []()
-		{
-			g_cell_adec_core_ops_atracx8ch->getMemSize.set(g_fxo->get<ppu_function_manager>().func_addr(FIND_FUNC(_CellAdecCoreOpGetMemSize_atracx<8>)));
-			init_gvar(g_cell_adec_core_ops_atracx8ch);
-		};
-		REG_VNID(cellAtracXdec, 0x4944af9a, g_cell_adec_core_ops_atracx).init = []()
-		{
-			g_cell_adec_core_ops_atracx->getMemSize.set(g_fxo->get<ppu_function_manager>().func_addr(FIND_FUNC(_CellAdecCoreOpGetMemSize_atracx<8>)));
-			init_gvar(g_cell_adec_core_ops_atracx);
-		};
+		g_cell_adec_core_ops_atracx2ch->getMemSize.set(g_fxo->get<ppu_function_manager>().func_addr(FIND_FUNC(_CellAdecCoreOpGetMemSize_atracx<2>)));
+		init_gvar(g_cell_adec_core_ops_atracx2ch);
+	};
+	REG_VNID(cellAtracXdec, 0x1d210eaa, g_cell_adec_core_ops_atracx6ch).init = []()
+	{
+		g_cell_adec_core_ops_atracx6ch->getMemSize.set(g_fxo->get<ppu_function_manager>().func_addr(FIND_FUNC(_CellAdecCoreOpGetMemSize_atracx<6>)));
+		init_gvar(g_cell_adec_core_ops_atracx6ch);
+	};
+	REG_VNID(cellAtracXdec, 0xe9a86e54, g_cell_adec_core_ops_atracx8ch).init = []()
+	{
+		g_cell_adec_core_ops_atracx8ch->getMemSize.set(g_fxo->get<ppu_function_manager>().func_addr(FIND_FUNC(_CellAdecCoreOpGetMemSize_atracx<8>)));
+		init_gvar(g_cell_adec_core_ops_atracx8ch);
+	};
+	REG_VNID(cellAtracXdec, 0x4944af9a, g_cell_adec_core_ops_atracx).init = []()
+	{
+		g_cell_adec_core_ops_atracx->getMemSize.set(g_fxo->get<ppu_function_manager>().func_addr(FIND_FUNC(_CellAdecCoreOpGetMemSize_atracx<8>)));
+		init_gvar(g_cell_adec_core_ops_atracx);
+	};
 
-		REG_HIDDEN_FUNC(_CellAdecCoreOpGetMemSize_atracx<2>);
-		REG_HIDDEN_FUNC(_CellAdecCoreOpGetMemSize_atracx<6>);
-		REG_HIDDEN_FUNC(_CellAdecCoreOpGetMemSize_atracx<8>);
-		REG_HIDDEN_FUNC(_CellAdecCoreOpOpen_atracx);
-		REG_HIDDEN_FUNC(_CellAdecCoreOpClose_atracx);
-		REG_HIDDEN_FUNC(_CellAdecCoreOpStartSeq_atracx);
-		REG_HIDDEN_FUNC(_CellAdecCoreOpEndSeq_atracx);
-		REG_HIDDEN_FUNC(_CellAdecCoreOpDecodeAu_atracx);
-		REG_HIDDEN_FUNC(_CellAdecCoreOpGetVersion_atracx);
-		REG_HIDDEN_FUNC(_CellAdecCoreOpRealign_atracx);
-		REG_HIDDEN_FUNC(_CellAdecCoreOpReleasePcm_atracx);
-		REG_HIDDEN_FUNC(_CellAdecCoreOpGetPcmHandleNum_atracx);
-		REG_HIDDEN_FUNC(_CellAdecCoreOpGetBsiInfoSize_atracx);
-		REG_HIDDEN_FUNC(_CellAdecCoreOpOpenExt_atracx);
+	REG_HIDDEN_FUNC(_CellAdecCoreOpGetMemSize_atracx<2>);
+	REG_HIDDEN_FUNC(_CellAdecCoreOpGetMemSize_atracx<6>);
+	REG_HIDDEN_FUNC(_CellAdecCoreOpGetMemSize_atracx<8>);
+	REG_HIDDEN_FUNC(_CellAdecCoreOpOpen_atracx);
+	REG_HIDDEN_FUNC(_CellAdecCoreOpClose_atracx);
+	REG_HIDDEN_FUNC(_CellAdecCoreOpStartSeq_atracx);
+	REG_HIDDEN_FUNC(_CellAdecCoreOpEndSeq_atracx);
+	REG_HIDDEN_FUNC(_CellAdecCoreOpDecodeAu_atracx);
+	REG_HIDDEN_FUNC(_CellAdecCoreOpGetVersion_atracx);
+	REG_HIDDEN_FUNC(_CellAdecCoreOpRealign_atracx);
+	REG_HIDDEN_FUNC(_CellAdecCoreOpReleasePcm_atracx);
+	REG_HIDDEN_FUNC(_CellAdecCoreOpGetPcmHandleNum_atracx);
+	REG_HIDDEN_FUNC(_CellAdecCoreOpGetBsiInfoSize_atracx);
+	REG_HIDDEN_FUNC(_CellAdecCoreOpOpenExt_atracx);
 
-		REG_HIDDEN_FUNC(atracXdecEntry);
-	});
+	REG_HIDDEN_FUNC(atracXdecEntry);
+});
