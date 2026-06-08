@@ -790,15 +790,18 @@ jit_compiler::jit_compiler(const std::unordered_map<std::string, u64>& _link, co
 	else
 		attributes.push_back("-i8mm");
 
-	if (utils::has_sve())
-		attributes.push_back("+sve");
-	else
-		attributes.push_back("-sve");
-
-	if (utils::has_sve2())
-		attributes.push_back("+sve2");
-	else
-		attributes.push_back("-sve2");
+	// We do not emit any SVE/SVE2 intrinsics in the PPU/SPU recompilers (unlike
+	// i8mm/dotprod above, which we do emit and therefore must advertise). Enabling
+	// these features here gives no benefit and only lets LLVM's AArch64 backend
+	// auto-select SVE/SVE2 for our otherwise-NEON-width JIT code. LLVM's SVE2
+	// codegen has been observed to miscompile recompiled SPU code on SVE2 mobile
+	// cores (e.g. Cortex-A720): the SPU register file gets corrupted (lr=0, sp=0)
+	// and the thread jumps to LS address 0 -> "Unknown STOP code: 0x0". This is the
+	// RADT5 Bink-decoder crash that freezes inFamous; the SPU interpreter, which
+	// does not JIT, runs the exact same code correctly. Force NEON-only codegen,
+	// the proven baseline on every other ARM64 target (incl. Apple Silicon, no SVE).
+	attributes.push_back("-sve");
+	attributes.push_back("-sve2");
 #endif
 
 	{
