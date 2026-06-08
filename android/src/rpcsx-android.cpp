@@ -966,8 +966,16 @@ class MainThreadProcessor {
   std::mutex mutex;
   std::condition_variable cv;
   std::deque<std::pair<std::function<void(JNIEnv *)>, atomic_t<u32> *>> queue;
+  std::atomic<std::thread::id> processorThreadId{};
 
 public:
+  // True when called from the thread that runs process() (the dedicated main
+  // thread). Used to invoke a queued callback inline instead of deadlocking on a
+  // re-entrant/blocking dispatch back to ourselves.
+  bool onProcessorThread() const {
+    return processorThreadId.load() == std::this_thread::get_id();
+  }
+
   void push(std::function<void(JNIEnv *)> cb, atomic_t<u32> *wakeUp = nullptr) {
     std::lock_guard lock(mutex);
     queue.push_back({std::move(cb), wakeUp});
@@ -979,6 +987,7 @@ public:
   }
 
   void process(JNIEnv *env) {
+    processorThreadId = std::this_thread::get_id();
     while (true) {
       std::function<void(JNIEnv *)> cb;
       atomic_t<u32> *wakeUp = nullptr;
@@ -1458,9 +1467,26 @@ static void setupCallbacks() {
   Emu.SetCallbacks({
       .call_from_main_thread =
           [](std::function<void()> cb, atomic_t<u32> *wake_up) {
-            cb();
-            if (wake_up) {
-              *wake_up = true;
+            // Run deferred Emu callbacks on the dedicated main-thread processor,
+            // never inline on the calling (often emulation/worker) thread. The
+            // Emu stop "join thread" hands its final teardown to
+            // CallFromMainThread, and that teardown drops the last reference to
+            // the join thread itself; running it inline made the thread join
+            // itself in its named_thread destructor and deadlock - this was the
+            // shutdown hang (log: "Thread [Emulation Join Thread] is too sleepy"
+            // emitted by the Emulation Join Thread). Dispatching to the processor
+            // makes that destructor run on a different thread, joining the now
+            // finished join thread cleanly. If we are already on the processor
+            // thread, run inline to avoid a self-deadlock on re-entrant blocking
+            // calls (matches the desktop "already on main thread" fast path).
+            if (g_mainThreadProcessor.onProcessorThread()) {
+              cb();
+              if (wake_up) {
+                *wake_up = true;
+                wake_up->notify_all();
+              }
+            } else {
+              g_mainThreadProcessor.push(std::move(cb), wake_up);
             }
           },
       .on_run = [](auto...) {},
