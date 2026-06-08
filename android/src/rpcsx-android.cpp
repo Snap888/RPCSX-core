@@ -2632,8 +2632,12 @@ extern "C" std::string _rpcsx_patchesList() {
     for (const auto &[description, info] : container.patch_info_map) {
       bool enabled = false;
       std::set<std::string> serials;
+      std::set<std::string> titles;
 
       for (const auto &[title, serial_map] : info.titles) {
+        if (!title.empty()) {
+          titles.insert(title);
+        }
         for (const auto &[serial, version_map] : serial_map) {
           serials.insert(serial);
           for (const auto &[version, cfg] : version_map) {
@@ -2668,6 +2672,17 @@ extern "C" std::string _rpcsx_patchesList() {
         sfirst = false;
         out += "\"";
         patch_json_escape(out, s);
+        out += "\"";
+      }
+      out += "],\"titles\":[";
+      bool tfirst = true;
+      for (const auto &t : titles) {
+        if (!tfirst) {
+          out += ",";
+        }
+        tfirst = false;
+        out += "\"";
+        patch_json_escape(out, t);
         out += "\"";
       }
       out += "],\"enabled\":";
