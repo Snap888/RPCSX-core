@@ -267,6 +267,13 @@ public:
 	static const ppu_static_module cellUsbPspcm;
 	static const ppu_static_module cellUserInfo;
 	static const ppu_static_module cellVdec;
+	static const ppu_static_module libavcdec;
+	static const ppu_static_module libmvcdec;
+	static const ppu_static_module libsmvd2;
+	static const ppu_static_module libsmvd4;
+	static const ppu_static_module libsjvtd;
+	static const ppu_static_module libdivxdec;
+	static const ppu_static_module libdivx311dec;
 	static const ppu_static_module cellVideoExport;
 	static const ppu_static_module cellVideoPlayerUtility;
 	static const ppu_static_module cellVideoUpload;

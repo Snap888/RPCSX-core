@@ -105,6 +105,13 @@ add_library(rpcsx_fw_ps3 OBJECT
     HLE_PATCHES.cpp
     libad_async.cpp
     libad_core.cpp
+    libavcdec.cpp
+    libdivx311dec.cpp
+    libdivxdec.cpp
+    libmvcdec.cpp
+    libsjvtd.cpp
+    libsmvd2.cpp
+    libsmvd4.cpp
     libmedi.cpp
     libmixer.cpp
     libsnd3.cpp
