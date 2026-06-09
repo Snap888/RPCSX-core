@@ -112,6 +112,7 @@ add_library(rpcsx_fw_ps3 OBJECT
     libsjvtd.cpp
     libsmvd2.cpp
     libsmvd4.cpp
+    libsvc1d.cpp
     libmedi.cpp
     libmixer.cpp
     libsnd3.cpp

@@ -1235,6 +1235,15 @@ error_code sceNpBasicSendMessage(vm::cptr<SceNpId> to, vm::cptr<void> data,
 	return CELL_OK;
 }
 
+// sceNpBasicSendMessage plus a rate limiter (upstream returns SCE_NP_BASIC_ERROR_BUSY
+// when too many messages have been sent). Our older sceNp predates the internal
+// _sceNpBasicSendMessage split, so forward to sceNpBasicSendMessage without the limiter.
+error_code sceNpBasicLimited_0xEB42E2E6(vm::cptr<SceNpId> to, vm::cptr<void> data, u32 size)
+{
+	sceNp.warning("sceNpBasicLimited_0xEB42E2E6(to=*0x%x, data=*0x%x, size=%d)", to, data, size);
+	return sceNpBasicSendMessage(to, data, size);
+}
+
 error_code sceNpBasicSendMessageGui(ppu_thread& ppu,
 	vm::cptr<SceNpBasicMessageDetails> msg,
 	sys_memory_container_t containerId)
@@ -8238,6 +8247,11 @@ s32 _Z32_sce_np_sysutil_cxml_prepare_docPN16sysutil_cxmlutil11FixedMemoryERN4cxm
 			   "cxmlutil11FixedMemoryERN4cxml8DocumentEPKcRNS2_7ElementES6_i()");
 	return CELL_OK;
 }
+
+DECLARE(ppu_module_manager::sceNpBasicLimited)
+("sceNpBasicLimited", []() {
+	ppu_module_manager::register_static_function<&sceNpBasicLimited_0xEB42E2E6>("sceNpBasicLimited", ppu_select_name("sceNpBasicLimited", "sceNpBasicLimited_0xEB42E2E6"), BIND_FUNC_WITH_BLR(sceNpBasicLimited_0xEB42E2E6, "sceNpBasicLimited"), 0xEB42E2E6);
+});
 
 DECLARE(ppu_module_manager::sceNp)
 ("sceNp", []()
