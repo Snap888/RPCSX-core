@@ -1370,6 +1370,12 @@ s32 cellSpursInitialize(ppu_thread& ppu, vm::ptr<CellSpurs> spurs, s32 nSpus, s3
 	return _spurs::initialize(ppu, spurs, 0, 0, nSpus, spuPriority, ppuPriority, exitIfNoWork ? SAF_EXIT_IF_NO_WORK : SAF_NONE, vm::null, 0, 0, vm::null, 0, 0);
 }
 
+s32 cellSpursInitializeForSpuSharing()
+{
+	cellSpurs.todo("cellSpursInitializeForSpuSharing()");
+	return CELL_OK;
+}
+
 /// Initialise SPURS
 s32 cellSpursInitializeWithAttribute(ppu_thread& ppu, vm::ptr<CellSpurs> spurs, vm::cptr<CellSpursAttribute> attr)
 {
@@ -5416,6 +5422,7 @@ DECLARE(ppu_module_manager::cellSpurs)("cellSpurs", [](ppu_static_module* _this)
 	{
 		// Core
 		REG_FUNC(cellSpurs, cellSpursInitialize);
+		REG_FUNC(cellSpurs, cellSpursInitializeForSpuSharing);
 		REG_FUNC(cellSpurs, cellSpursInitializeWithAttribute);
 		REG_FUNC(cellSpurs, cellSpursInitializeWithAttribute2);
 		REG_FUNC(cellSpurs, cellSpursFinalize);
