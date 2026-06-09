@@ -136,7 +136,15 @@ static spu_function_t compile_spu_llvm_with_retry(std::unique_ptr<spu_recompiler
 	spu_llvm_compile_context context;
 
 	{
-		spu_llvm_compile_scope scope(context, true);
+		// Compile without TBL2/TBX2. The aarch64_neon_tbl2/tbx2 intrinsics require two
+		// adjacently-allocated vector registers; under SPU register pressure LLVM can emit
+		// a pairing that compiles cleanly but reads the wrong register at runtime, silently
+		// corrupting dynamic SHUFB results (SPU register-file corruption -> games that lean
+		// on SPURS jobs, e.g. inFamous/Uncharted, crash). The scavenger-error retry below
+		// only catches a compile-time failure, not this runtime miscompile, so a bad tbl2
+		// slips through. The working ARM reference (aps3e) never emits these intrinsics; the
+		// split tbl1/tbx1 lowering is provably equivalent and has no adjacency requirement.
+		spu_llvm_compile_scope scope(context, false);
 
 		if (const auto result = compiler->compile(spu_program{program}))
 		{

@@ -1628,7 +1628,10 @@ public:
 		}
 
 #ifdef ARCH_ARM64
-		m_use_tbl2 = !g_spu_llvm_compile_context || g_spu_llvm_compile_context->use_tbl2;
+		// Only emit the adjacency-fragile aarch64_neon_tbl2/tbx2 intrinsics when a compile
+		// context explicitly opts in. Default (incl. null context) is the safe split tbl1/tbx1
+		// lowering, which has no register-pairing requirement and can't silently miscompile.
+		m_use_tbl2 = g_spu_llvm_compile_context && g_spu_llvm_compile_context->use_tbl2;
 
 		if (g_spu_llvm_compile_context)
 		{
