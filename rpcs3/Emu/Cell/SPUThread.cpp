@@ -5957,6 +5957,14 @@ s64 spu_thread::get_ch_value(u32 ch)
 			return true;
 		};
 
+		// Stall watchdog: SPURS soft-freezes show threads sitting in this wait for
+		// tens of seconds. Log ONCE per pathological wait which address is being
+		// watched and whether its content actually changed - that distinguishes a
+		// missed notification (content changed, no wake) from producer starvation
+		// (content genuinely never written).
+		const u64 wait_watchdog_start = get_system_time();
+		bool wait_watchdog_fired = false;
+
 		for (; !events.count; events = get_events(mask1 & ~SPU_EVENT_LR, true, true))
 		{
 			const auto old = +state;
@@ -5967,6 +5975,14 @@ s64 spu_thread::get_ch_value(u32 ch)
 				// may be shared with another SPU waiting on the same cache line.
 				deregister_cache_line_waiter(cache_line_waiter_index);
 				return -1;
+			}
+
+			if (!wait_watchdog_fired && get_system_time() - wait_watchdog_start > 15'000'000)
+			{
+				wait_watchdog_fired = true;
+				spu_log.error("Event-stat wait stalled for 15s (mask=0x%x, raddr=0x%x, rtime=0x%llx, res=0x%llx, line_changed=%s)",
+					mask1, raddr, rtime, raddr ? +vm::reservation_acquire(raddr) : 0,
+					(raddr && resrv_mem) ? (cmp_rdata(rdata, *resrv_mem) ? "no" : "YES") : "n/a");
 			}
 
 			// Optimized check
