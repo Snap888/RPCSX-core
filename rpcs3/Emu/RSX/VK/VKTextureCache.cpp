@@ -1040,6 +1040,14 @@ namespace vk
 						VkClearDepthStencilValue clear{1.f, 255};
 						VK_GET_SYMBOL(vkCmdClearDepthStencilImage)(cmd, image->value, image->current_layout, &clear, 1, &range);
 					}
+
+					// WAW hazard: make the wipe-clear visible before the upload copies into the recycled image
+					vk::insert_image_memory_barrier(
+						cmd, image->value,
+						image->current_layout, image->current_layout,
+						VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+						VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
+						range);
 				}
 			}
 		}
