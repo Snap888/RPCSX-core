@@ -2240,7 +2240,7 @@ void VKGSRender::load_program_env()
 
 	if (vk::emulate_conditional_rendering())
 	{
-		auto predicate = m_cond_render_buffer ? m_cond_render_buffer->value : vk::get_scratch_buffer(*m_current_command_buffer, 4)->value;
+		auto predicate = m_cond_render_buffer ? m_cond_render_buffer->value : vk::get_scratch_buffer(*m_current_command_buffer, 4, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_ACCESS_NONE)->value;
 		m_program->bind_buffer({predicate, 0, 4}, binding_table.conditional_render_predicate_slot, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, m_current_frame->descriptor_set);
 	}
 
@@ -3066,7 +3066,7 @@ void VKGSRender::begin_conditional_rendering(const std::vector<rsx::reports::occ
 	else if (num_hw_queries > 0)
 	{
 		// We'll need to do some result aggregation using a compute shader.
-		auto scratch = vk::get_scratch_buffer(*m_current_command_buffer, num_hw_queries * 4);
+		auto scratch = vk::get_scratch_buffer(*m_current_command_buffer, num_hw_queries * 4, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT);
 
 		// Range latching. Because of how the query pool manages allocations using a stack, we get an inverse sequential set of handles/indices that we can easily group together.
 		// This drastically boosts performance on some drivers like the NVIDIA proprietary one that seems to have a rather high cost for every individual query transer command.
