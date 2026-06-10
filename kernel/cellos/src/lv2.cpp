@@ -2453,7 +2453,9 @@ void lv2_obj::notify_all() noexcept {
 
   atomic_t<u64, 64> *range_lock = nullptr;
 
-  for (usz i = 0, checked = 0; checked < 3 && i < total_waiters; i++) {
+  // Match upstream: scan up to 4 of the 6 SPU reservation-waiter slots per
+  // pass (we scanned 3 - one slot less coverage in the SPU wakeup path).
+  for (usz i = 0, checked = 0; checked < 4 && i < total_waiters; i++) {
     auto &waiter =
         spu_thread::g_spu_waiters_by_value[(i + cpu->id) % total_waiters];
     const u64 value = waiter.load();
