@@ -2182,6 +2182,41 @@ void sigpipe_signaling_handler(int)
 {
 }
 
+#ifdef ANDROID
+static void sigabrt_handler(int /*sig*/, siginfo_t* /*info*/, void* /*uct*/) noexcept
+{
+	// libc/scudo/driver abort() - without this handler the process dies with
+	// nothing in RPCSX.log (only SIGSEGV/SIGILL were captured before).
+	std::string msg = "Process abort (SIGABRT) - heap corruption, libc assert or library abort.\n";
+
+	append_thread_name(msg);
+
+	sys_log.fatal("\n%s", msg);
+	sys_log.notice("\n%s", dump_useful_thread_info());
+	logs::listener::sync_all();
+
+	// abort() is a normal call chain (not a corrupted PC), so a full unwind is
+	// safe here and identifies the aborting library (scudo, Vulkan driver, libc).
+	{
+		std::string bt;
+		const auto symbols = utils::get_backtrace_symbols(utils::get_backtrace(64));
+		for (usz i = 0; i < symbols.size(); i++)
+		{
+			fmt::append(bt, "#%u: %s\n", i, symbols[i]);
+		}
+		if (!bt.empty())
+		{
+			sys_log.fatal("\nNative backtrace:\n%s", bt);
+			logs::listener::sync_all();
+		}
+	}
+
+	// Restore the default action and re-raise so the system tombstone is still produced
+	::signal(SIGABRT, SIG_DFL);
+	::raise(SIGABRT);
+}
+#endif
+
 const bool s_exception_handler_set = []() -> bool
 {
 	struct ::sigaction sa;
@@ -2195,7 +2230,9 @@ const bool s_exception_handler_set = []() -> bool
 		std::abort();
 	}
 
-#ifdef __APPLE__
+#if defined(__APPLE__) || defined(ANDROID)
+	// On ARM Android SIGBUS (alignment faults, truncated mmaps) would otherwise
+	// kill the process with nothing written to the log.
 	if (::sigaction(SIGBUS, &sa, NULL) == -1)
 	{
 		std::fprintf(stderr, "sigaction(SIGBUS) failed (%d).\n", errno);
@@ -2209,6 +2246,15 @@ const bool s_exception_handler_set = []() -> bool
 		std::fprintf(stderr, "sigaction(SIGILL) failed (%d).\n", errno);
 		std::abort();
 	}
+
+#ifdef ANDROID
+	sa.sa_sigaction = sigabrt_handler;
+	if (::sigaction(SIGABRT, &sa, NULL) == -1)
+	{
+		std::fprintf(stderr, "sigaction(SIGABRT) failed (%d).\n", errno);
+		std::abort();
+	}
+#endif
 
 	sa.sa_handler = sigpipe_signaling_handler;
 	if (::sigaction(SIGPIPE, &sa, NULL) == -1)
