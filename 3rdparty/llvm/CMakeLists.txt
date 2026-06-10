@@ -1,6 +1,8 @@
 
 if(WITH_LLVM)
-	set(USE_LLVM_VERSION 20.1.3)
+	if (NOT USE_LLVM_VERSION)
+		set(USE_LLVM_VERSION 20.1.3)
+	endif()
 	if (NOT MSVC)
 		check_cxx_compiler_flag("-msse -msse2 -mcx16" COMPILER_X86)
 		check_cxx_compiler_flag("-march=armv8-a+lse" COMPILER_ARM)
@@ -88,7 +90,21 @@ if(WITH_LLVM)
 			add_compile_definitions("$<$<COMPILE_LANGUAGE:CXX>:_SILENCE_ALL_CXX17_DEPRECATION_WARNINGS>")
 		endif()
 
-		if (LLVM_DOWNLOAD_BINARY STREQUAL "")
+		if (LLVM_PREBUILT_ROOT)
+			# Use a locally built LLVM/MLIR install (pass -DLLVM_PREBUILT_ROOT=...
+			# and -DUSE_LLVM_VERSION=... to match), e.g. a from-source 19.1.7
+			# Android arm64 build matching upstream RPCS3's validated JIT backend.
+			set(LLVM_DIR "${LLVM_PREBUILT_ROOT}/lib/cmake/llvm")
+			set(MLIR_DIR "${LLVM_PREBUILT_ROOT}/lib/cmake/mlir")
+
+			if (NOT EXISTS "${LLVM_DIR}")
+				message(FATAL_ERROR "LLVM_PREBUILT_ROOT has no lib/cmake/llvm: ${LLVM_PREBUILT_ROOT}")
+			endif()
+
+			if (NOT EXISTS "${MLIR_DIR}")
+				message(FATAL_ERROR "LLVM_PREBUILT_ROOT has no lib/cmake/mlir: ${LLVM_PREBUILT_ROOT}")
+			endif()
+		elseif (LLVM_DOWNLOAD_BINARY STREQUAL "")
 			# LLVM needs to be built out-of-tree
 			add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/llvm/llvm ${CMAKE_CURRENT_BINARY_DIR}/llvm_build EXCLUDE_FROM_ALL)
 			set(LLVM_DIR "${CMAKE_CURRENT_BINARY_DIR}/llvm_build/lib/cmake/llvm/")
