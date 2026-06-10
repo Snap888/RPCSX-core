@@ -2,6 +2,8 @@
 #include "descriptors.h"
 #include "garbage_collector.h"
 
+#include <mutex>
+
 namespace vk
 {
 	// Error handler callback
@@ -14,6 +16,11 @@ namespace vk
 		public:
 			inline void flush_all()
 			{
+				// Locked (upstream 2ae9753d7): register_/deregister can run on another
+				// thread (async pipeline creation, emu teardown) while a submit iterates
+				// this list; unsynchronized mutation corrupts the vector.
+				std::lock_guard lock(m_notifications_lock);
+
 				for (auto& set : m_notification_list)
 				{
 					set->flush();
@@ -22,6 +29,8 @@ namespace vk
 
 			void register_(descriptor_set* set)
 			{
+				std::lock_guard lock(m_notifications_lock);
+
 				// Rare event, upon creation of a new set tracker.
 				// Check for spurious 'new' events when the aux context is taking over
 				for (const auto& set_ : m_notification_list)
@@ -36,6 +45,8 @@ namespace vk
 
 			void deregister(descriptor_set* set)
 			{
+				std::lock_guard lock(m_notifications_lock);
+
 				for (auto it = m_notification_list.begin(); it != m_notification_list.end(); ++it)
 				{
 					if (*it == set)
@@ -53,6 +64,7 @@ namespace vk
 
 		private:
 			rsx::simple_array<descriptor_set*> m_notification_list;
+			std::mutex m_notifications_lock;
 
 			dispatch_manager(const dispatch_manager&) = delete;
 			dispatch_manager& operator=(const dispatch_manager&) = delete;
