@@ -131,7 +131,9 @@ namespace vk
 			}
 #endif
 
-			auto working_buffer = vk::get_scratch_buffer(cmd, working_buffer_length);
+			auto working_buffer = vk::get_scratch_buffer(cmd, working_buffer_length,
+				VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+				VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_SHADER_WRITE_BIT);
 			u32 result_offset = 0;
 
 			VkBufferImageCopy region = {};
@@ -220,7 +222,7 @@ namespace vk
 					// Transfer -> Compute barrier
 					vk::insert_buffer_memory_barrier(cmd, working_buffer->value, dst_offset, dma_sync_region.length(),
 						VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-						VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT);
+						VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT);
 				}
 
 				// Prepare payload
