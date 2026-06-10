@@ -494,16 +494,21 @@ void VKGSRender::load_texture_env()
 		}
 	}
 
-	if (g_cfg.video.vk.asynchronous_texture_streaming)
+	// Gate on the SANITIZED capability, not the raw config (upstream behavior):
+	// init disables async compute when graphics and transfer share one queue
+	// (typical on Adreno), and the scheduler is then never initialized -
+	// g_fxo->get on it crashed at boot whenever the setting was enabled.
+	if (backend_config.supports_asynchronous_compute)
 	{
 		// We have to do this here, because we have to assume the CB will be dumped
-		auto& async_task_scheduler = g_fxo->get<vk::AsyncTaskScheduler>();
+		auto async_task_scheduler = g_fxo->try_get<vk::AsyncTaskScheduler>();
 
-		if (async_task_scheduler.is_recording() &&
-			!async_task_scheduler.is_host_mode())
+		if (async_task_scheduler &&
+			async_task_scheduler->is_recording() &&
+			!async_task_scheduler->is_host_mode())
 		{
 			// Sync any async scheduler tasks
-			if (auto ev = async_task_scheduler.get_primary_sync_label())
+			if (auto ev = async_task_scheduler->get_primary_sync_label())
 			{
 				ev->gpu_wait(*m_current_command_buffer, m_async_compute_dependency_info);
 			}
