@@ -5465,7 +5465,10 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 				settings += ppu_settings::contains_symbol_resolver; // Avoid invalidating all modules for this purpose
 
 			// Write version, hash, CPU, settings
-			fmt::append(obj_name, "v7-kusa-%s-%s-%s.obj", fmt::base57(output, 16), fmt::base57(settings), jit_compiler::cpu(g_cfg.core.llvm_cpu));
+			// v8: fork bump over upstream v7 - objs cached before the ARM64 codegen fixes
+			// (branch-folding disable etc.) must not be reused, or the fixes never take
+			// effect on installs with an existing compiled cache.
+			fmt::append(obj_name, "v8-kusa-%s-%s-%s.obj", fmt::base57(output, 16), fmt::base57(settings), jit_compiler::cpu(g_cfg.core.llvm_cpu));
 		}
 
 		if (cpu ? cpu->state.all_of(cpu_flag::exit) : Emu.IsStopped())

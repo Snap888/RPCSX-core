@@ -1488,11 +1488,16 @@ spu_runtime::spu_runtime()
 		return;
 	}
 
+	// Drop pre-v2 compiled objs (built before the ARM64 codegen fixes). They must
+	// not be reused - LLVM's obj cache keys only on content hash, so stale objs
+	// would silently keep the old codegen alive - and they only waste storage.
+	fs::remove_all(m_cache_path + "llvm/", true);
+
 	if (g_cfg.core.spu_debug && g_cfg.core.spu_decoder != spu_decoder_type::dynamic && g_cfg.core.spu_decoder != spu_decoder_type::_static)
 	{
-		if (!fs::create_dir(m_cache_path + "llvm/"))
+		if (!fs::create_dir(m_cache_path + "llvm-v2/"))
 		{
-			fs::remove_all(m_cache_path + "llvm/", false);
+			fs::remove_all(m_cache_path + "llvm-v2/", false);
 		}
 
 		fs::write_file(m_cache_path + "spu.log", fs::rewrite);

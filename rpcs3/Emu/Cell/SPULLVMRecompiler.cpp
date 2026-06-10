@@ -3472,7 +3472,7 @@ public:
 				if (g_cfg.core.spu_debug)
 				{
 					// Testing only
-					added = m_jit.try_add(std::move(_module), m_spurt->get_cache_path() + "llvm/", llvm_error);
+					added = m_jit.try_add(std::move(_module), m_spurt->get_cache_path() + "llvm-v2/", llvm_error);
 				}
 				else
 				{
@@ -3494,7 +3494,7 @@ public:
 				if (g_cfg.core.spu_debug)
 				{
 					// Testing only
-					m_jit.add(std::move(_module), m_spurt->get_cache_path() + "llvm/");
+					m_jit.add(std::move(_module), m_spurt->get_cache_path() + "llvm-v2/");
 				}
 				else
 				{
@@ -3507,7 +3507,7 @@ public:
 			if (g_cfg.core.spu_debug)
 			{
 				// Testing only
-				m_jit.add(std::move(_module), m_spurt->get_cache_path() + "llvm/");
+				m_jit.add(std::move(_module), m_spurt->get_cache_path() + "llvm-v2/");
 			}
 			else
 			{
@@ -3965,7 +3965,7 @@ public:
 		if (g_cfg.core.spu_debug)
 		{
 			// Testing only
-			m_jit.add(std::move(_module), m_spurt->get_cache_path() + "llvm/");
+			m_jit.add(std::move(_module), m_spurt->get_cache_path() + "llvm-v2/");
 		}
 		else
 		{
