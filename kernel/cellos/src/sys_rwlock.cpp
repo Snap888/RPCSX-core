@@ -369,6 +369,10 @@ error_code sys_rwlock_wlock(ppu_thread &ppu, u32 rw_lock_id, u64 timeout) {
           continue;
         }
 
+        // Re-arm the wait flag cleared by check_state (upstream b30a20c2d);
+        // the unqueue/reader-wake below runs scheduler ops that assume it.
+        ppu.state += cpu_flag::wait;
+
         std::lock_guard lock(rwlock->mutex);
 
         if (!rwlock->unqueue(rwlock->wq, &ppu)) {

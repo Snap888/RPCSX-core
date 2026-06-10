@@ -99,6 +99,13 @@ error_code gcmMapEaIoAddress(ppu_thread& ppu, u32 ea, u32 io, u32 size, bool is_
 
 u32 gcmIoOffsetToAddress(u32 ioOffset)
 {
+	if (ioOffset >= 0x20000000)
+	{
+		// Out of IO space (upstream guard): indexing past the 512-entry offset
+		// table would read adjacent guest memory and return a garbage address.
+		return 0;
+	}
+
 	const u32 upper12Bits = g_fxo->get<gcm_config>().offsetTable.eaAddress[ioOffset >> 20];
 
 	if (upper12Bits > 0xBFF)

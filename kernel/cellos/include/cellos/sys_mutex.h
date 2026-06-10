@@ -142,7 +142,12 @@ struct lv2_mutex final : lv2_obj {
         res = schedule<T>(data.sq, protocol, false);
 
         if (sq == data.sq) {
-          atomic_storage<u32>::release(control.raw().owner, res->id);
+          // Don't hand ownership to a thread that is restarting its syscall
+          // (upstream b30a20c2d) - it would re-lock a mutex already owned by it.
+          if (cpu_flag::again - res->state) {
+            atomic_storage<u32>::release(control.raw().owner, res->id);
+          }
+
           return false;
         }
 
