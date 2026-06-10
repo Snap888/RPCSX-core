@@ -1,5 +1,6 @@
 #include "Crypto/unpkg.h"
 #include "Crypto/unself.h"
+#include "yaml-cpp/yaml.h"
 #include "Emu/Audio/Cubeb/CubebBackend.h"
 #include "Emu/Audio/Null/NullAudioBackend.h"
 #include "Emu/Cell/PPUAnalyser.h"
@@ -2786,7 +2787,12 @@ extern "C" bool _rpcsx_customConfigCreate(std::string_view serial) {
     return false;
   }
   ensure_custom_config_dir();
-  Emulator::SaveSettings(g_cfg.to_string(), std::string(serial));
+  // Write an EMPTY config, not a snapshot of the globals. Boot overlays the
+  // custom file over the live global config (System.cpp), so an empty file
+  // means "inherit everything" - only fields the user later edits get pinned.
+  // A full snapshot froze ALL settings at creation time, silently masking any
+  // later global tuning ("same settings run slower with a custom config").
+  Emulator::SaveSettings("{}\n", std::string(serial));
   return _rpcsx_customConfigExists(serial);
 }
 
@@ -2856,8 +2862,52 @@ extern "C" bool _rpcsx_customConfigSet(std::string_view serial,
     return false;
   }
 
+  // Persist ONLY the edited node. Untouched settings stay absent from the
+  // custom file and keep inheriting the live global config at boot. Saving the
+  // full effective snapshot here would pin every setting at its current value.
+  YAML::Node yaml_root;
+
+  if (fs::file f{rpcs3::utils::get_custom_config_path(std::string(serial))}) {
+    try {
+      yaml_root = YAML::Load(f.to_string());
+    } catch (...) {
+      rpcsx_android.error(
+          "customConfigSet: existing custom config unreadable, recreating");
+    }
+  }
+
+  if (!yaml_root.IsMap()) {
+    yaml_root = YAML::Node(YAML::NodeType::Map);
+  }
+
+  {
+    const auto pathList = fmt::split(path, {"@@"});
+    YAML::Node cur;
+    cur.reset(yaml_root);
+
+    for (usz i = 0; i < pathList.size(); i++) {
+      if (i + 1 == pathList.size()) {
+        // Leaf: store the validated scalar (enum/string as-is; bool/number via
+        // their JSON spelling, which matches the YAML scalar form).
+        if (value.is_string()) {
+          cur[pathList[i]] = value.get<std::string>();
+        } else {
+          cur[pathList[i]] = value.dump();
+        }
+        break;
+      }
+
+      YAML::Node next = cur[pathList[i]];
+      if (!next.IsMap()) {
+        cur[pathList[i]] = YAML::Node(YAML::NodeType::Map);
+        next.reset(cur[pathList[i]]);
+      }
+      cur.reset(next);
+    }
+  }
+
   ensure_custom_config_dir();
-  Emulator::SaveSettings(cfg.to_string(), std::string(serial));
+  Emulator::SaveSettings(YAML::Dump(yaml_root) + "\n", std::string(serial));
   return true;
 }
 
