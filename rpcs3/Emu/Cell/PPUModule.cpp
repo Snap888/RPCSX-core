@@ -3238,7 +3238,9 @@ bool ppu_load_rel_exec(const ppu_rel_object& elf)
 
 	for (const auto& s : elf.shdrs)
 	{
-		if (s.sh_type != sec_type::sht_progbits)
+		// == not != (upstream fix 2f9f79eea): memsize must count the progbits
+		// sections that are later copied in, or the copy overflows the alloc.
+		if (s.sh_type == sec_type::sht_progbits)
 		{
 			memsize = rx::alignUp<u32>(memsize + vm::cast(s.sh_size), 128);
 		}
