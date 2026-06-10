@@ -614,6 +614,7 @@ struct GameInfo {
   std::string name;
   std::string iconPath;
   int flags = 0;
+  std::string version;
 };
 
 class Progress {
@@ -671,9 +672,20 @@ static void sendGameInfo(JNIEnv *env, jlong progressId,
       gameRepositoryClass, "add", "([Lnet/rpcsx/GameInfo;J)V"));
   auto gameClass = ensure(env->FindClass("net/rpcsx/GameInfo"));
 
-  jmethodID gameConstructor = ensure(env->GetMethodID(
+  // Prefer the 5-arg constructor (with the game version); fall back to the
+  // legacy 4-arg one so a new core keeps working with an older app.
+  jmethodID gameConstructorV2 = env->GetMethodID(
       gameClass, "<init>",
-      "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;I)V"));
+      "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;)V");
+  if (gameConstructorV2 == nullptr) {
+    env->ExceptionClear();
+  }
+
+  jmethodID gameConstructor =
+      gameConstructorV2 ? nullptr
+                        : ensure(env->GetMethodID(
+                              gameClass, "<init>",
+                              "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;I)V"));
 
   std::vector<jobject> objects;
   objects.reserve(infos.size());
@@ -684,10 +696,17 @@ static void sendGameInfo(JNIEnv *env, jlong progressId,
       path.resize(path.size() - 1);
     }
 
-    objects.push_back(env->NewObject(
-        gameClass, gameConstructor, wrap(env, path), wrap(env, info.name),
-        wrap(env, Emu.GetCallbacks().resolve_path(info.iconPath)),
-        jint(info.flags)));
+    if (gameConstructorV2) {
+      objects.push_back(env->NewObject(
+          gameClass, gameConstructorV2, wrap(env, path), wrap(env, info.name),
+          wrap(env, Emu.GetCallbacks().resolve_path(info.iconPath)),
+          jint(info.flags), wrap(env, info.version)));
+    } else {
+      objects.push_back(env->NewObject(
+          gameClass, gameConstructor, wrap(env, path), wrap(env, info.name),
+          wrap(env, Emu.GetCallbacks().resolve_path(info.iconPath)),
+          jint(info.flags)));
+    }
   }
 
   auto result = env->NewObjectArray(objects.size(), gameClass, nullptr);
@@ -823,6 +842,9 @@ fetchGameInfo(const psf::registry &psf,
   auto name = std::string(psf::get_string(psf, "TITLE"));
   auto bootable = psf::get_integer(psf, "BOOTABLE", 0);
   auto category = psf::get_string(psf, "CATEGORY");
+  // Game version for display: APP_VER (patched version) over disc VERSION
+  auto version = std::string(
+      psf::get_string(psf, "APP_VER", psf::get_string(psf, "VERSION", "")));
 
   if (!bootable || titleId.empty()) {
     return {};
@@ -907,6 +929,7 @@ fetchGameInfo(const psf::registry &psf,
       .name = std::move(name),
       .iconPath = std::move(iconPath),
       .flags = flags,
+      .version = std::move(version),
   };
 }
 
