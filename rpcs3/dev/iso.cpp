@@ -295,8 +295,18 @@ iso_dev::read_dir(const iso::DirEntry& entry)
 	for (std::size_t block = first_block, end = first_block + total_block_count;
 		block < end;)
 	{
-		auto block_count =
-			m_dev->read(block, buffer.data(), total_buffer_block_count);
+		// Clamp to the directory extent: requesting the full buffer size past the
+		// end parsed adjacent ISO sectors as phantom directory entries.
+		auto block_count = m_dev->read(
+			block, buffer.data(),
+			std::min<std::size_t>(total_buffer_block_count, end - block));
+
+		if (block_count == 0)
+		{
+			// Short device read; advancing by 0 would loop forever
+			break;
+		}
+
 		block += block_count;
 
 		std::size_t buffer_offset = 0;
@@ -383,7 +393,11 @@ fs::file iso_dev::read_file(const iso::DirEntry& entry)
 
 	std::vector<std::uint8_t> data;
 	data.resize(block_count * block_size);
-	if (!m_dev->read(entry.lba.value(), data.data(), block_count))
+
+	// Require the FULL extent: a partial read (truncated/corrupt ISO) used to
+	// pass the old !read() check and silently hand the game a zero-filled tail,
+	// which games dereference as pointers/sizes and crash far from the cause.
+	if (m_dev->read(entry.lba.value(), data.data(), block_count) != block_count)
 	{
 		return {};
 	}
