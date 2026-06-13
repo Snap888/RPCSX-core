@@ -50,7 +50,9 @@ lv2_memory::lv2_memory(utils::serial &ar)
         // Consume those bytes so the stream stays aligned; the buffer is an
         // unmapped (zero) region, kept as-is for that restored object.
         if (GET_SERIALIZATION_VERSION(lv2_memory) < 2) {
-          const auto _shm = std::make_shared<utils::shm>(size, 1);
+          // Non-const so make_single_value yields a mutable single_ptr that the
+          // atomic_ptr<shared_ptr<shm>> member accepts.
+          auto _shm = std::make_shared<utils::shm>(size, 1);
           ar(std::span(_shm->map_self(), size));
           return make_single_value(std::move(_shm));
         }
