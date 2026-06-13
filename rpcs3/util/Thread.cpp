@@ -3374,19 +3374,23 @@ void thread_ctrl::set_native_priority(int priority)
 		sig_log.error("SetThreadPriority() failed: %s", fmt::win_error{GetLastError(), nullptr});
 	}
 #else
-	int policy;
-	struct sched_param param;
+	// Linux/Android: JIT/compile threads run under SCHED_OTHER, whose
+	// sched_priority range is [0,0]. The old pthread_setschedparam() path was
+	// therefore a no-op, so "low priority" compile threads still ran at full
+	// normal priority and saturated every core - starving the UI thread and
+	// causing ANRs ("app not responding") while a game compiled. SCHED_OTHER is
+	// (de)prioritised via the nice value, so use setpriority() instead.
+	//   priority < 0  -> nice +10 (Android THREAD_PRIORITY_BACKGROUND): keeps the
+	//                    compile running but lets the foreground UI preempt it.
+	//   priority == 0 -> nice 0 (restore to normal).
+	//   priority > 0  -> nice -2 (best effort; raising may be denied on Android).
+	const int nice_value = priority < 0 ? 10 : (priority > 0 ? -2 : 0);
 
-	pthread_getschedparam(pthread_self(), &policy, &param);
-
-	if (priority > 0)
-		param.sched_priority = sched_get_priority_max(policy);
-	if (priority < 0)
-		param.sched_priority = sched_get_priority_min(policy);
-
-	if (int err = pthread_setschedparam(pthread_self(), policy, &param))
+	if (setpriority(PRIO_PROCESS, static_cast<id_t>(::gettid()), nice_value) != 0 && priority < 0)
 	{
-		sig_log.error("pthread_setschedparam() failed: %d", err);
+		// Only the lowering path matters for responsiveness; raising can fail
+		// without CAP_SYS_NICE, which is fine - don't spam the log for it.
+		sig_log.error("setpriority(nice=%d) failed", nice_value);
 	}
 #endif
 }
