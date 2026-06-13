@@ -22,7 +22,11 @@ struct lv2_memory : lv2_obj {
   const u64 key;                  // IPC key
   const bool pshared;             // Process shared flag
   lv2_memory_container *const ct; // Associated memory container
-  const std::shared_ptr<utils::shm> shm;
+  // Host backing for the shared memory. Allocated LAZILY (null until first
+  // mapped) to match upstream - the old eager allocation + mlock pin at create
+  // time committed/pinned the whole buffer up front, a needless RAM hit on
+  // low-memory devices.
+  atomic_ptr<std::shared_ptr<utils::shm>> shm;
 
   atomic_t<u32> counter{0};
 
