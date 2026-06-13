@@ -1117,7 +1117,7 @@ error_code cellPadSetPressMode(u32 port_no, u32 mode)
 	if (!config.max_connect)
 		return CELL_PAD_ERROR_UNINITIALIZED;
 
-	if (port_no >= CELL_PAD_MAX_PORT_NUM)
+	if (port_no >= CELL_MAX_PADS || mode > 1)
 		return CELL_PAD_ERROR_INVALID_PARAMETER;
 
 	// CELL_PAD_ERROR_NO_DEVICE is not returned in this case.
@@ -1151,7 +1151,7 @@ error_code cellPadSetSensorMode(u32 port_no, u32 mode)
 	if (!config.max_connect)
 		return CELL_PAD_ERROR_UNINITIALIZED;
 
-	if (port_no >= CELL_MAX_PADS)
+	if (port_no >= CELL_MAX_PADS || mode > 1)
 		return CELL_PAD_ERROR_INVALID_PARAMETER;
 
 	// CELL_PAD_ERROR_NO_DEVICE is not returned in this case.

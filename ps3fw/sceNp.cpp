@@ -906,7 +906,7 @@ error_code sceNpDrmGetTimelimit(vm::cptr<char> path, vm::ptr<u64> time_remain)
 	}
 
 	// Convert time to milliseconds
-	s64 msec = *sec * 1000ll + *nsec / 1000ll;
+	s64 msec = *sec * 1000ll + *nsec / 1'000'000ll;
 
 	// Return the remaining time in microseconds
 	if (npd.activate_time != 0 && msec < npd.activate_time)
