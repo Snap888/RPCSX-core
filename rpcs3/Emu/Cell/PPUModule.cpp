@@ -2138,6 +2138,7 @@ bool ppu_load_exec(const ppu_exec_object& elf, bool virtual_load, const std::str
 	u32 sdk_version = SYS_PROCESS_PARAM_SDK_VERSION_UNKNOWN;
 	s32 primary_prio = 1001;
 	u32 primary_stacksize = SYS_PROCESS_PARAM_STACK_SIZE_MAX;
+	u32 segs_size = 0;
 	u32 malloc_pagesize = SYS_PROCESS_PARAM_MALLOC_PAGE_SIZE_1M;
 	u32 ppc_seg = 0;
 
@@ -2248,6 +2249,10 @@ bool ppu_load_exec(const ppu_exec_object& elf, bool virtual_load, const std::str
 			// Store only LOAD segments (TODO)
 			_main.segs.emplace_back(_seg);
 			_main.addr_to_seg_index.emplace(addr, ::size32(_main.segs) - 1);
+
+			// Charge the executable's loaded segments against the lv2 memory
+			// container (upstream parity) so free-memory accounting matches hw.
+			segs_size += rx::alignUp<u32>(size + addr % 0x10000, 0x10000);
 
 			// Copy segment data, hash it
 			if (!already_loaded)
@@ -2804,7 +2809,7 @@ bool ppu_load_exec(const ppu_exec_object& elf, bool virtual_load, const std::str
 
 	ppu->gpr[1] -= stack_alloc_size;
 
-	ensure(g_fxo->get<lv2_memory_container>().take(primary_stacksize));
+	ensure(g_fxo->get<lv2_memory_container>().take(primary_stacksize + segs_size));
 
 	ppu->cmd_push({ppu_cmd::initialize, 0});
 

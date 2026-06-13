@@ -26,6 +26,14 @@ namespace rpcs3::utils
 	void set_compile_thread_cap(u32 cap);
 	u32 get_compile_thread_cap();
 
+	// Android battery-saver. When on, the core makes low-power choices at the
+	// EFFECTIVE level (so a saved/per-game config can't undo it, like the compile
+	// cap): forces FIFO present (caps the GPU to the display) and collapses the
+	// SPU GETLLAR busy-wait so idle SPU reservation polls park instead of pinning
+	// a big core. Default false = off = byte-identical to stock. The app toggles it.
+	void set_power_save_mode(bool on);
+	bool get_power_save_mode();
+
 	void configure_logs(bool force_enable = false);
 
 	u32 check_user(const std::string& user);

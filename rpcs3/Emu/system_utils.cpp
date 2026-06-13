@@ -32,6 +32,18 @@ namespace rpcs3::utils
 		return g_compile_thread_cap.load(std::memory_order_relaxed);
 	}
 
+	static std::atomic<bool> g_power_save_mode{false};
+
+	void set_power_save_mode(bool on)
+	{
+		g_power_save_mode.store(on, std::memory_order_relaxed);
+	}
+
+	bool get_power_save_mode()
+	{
+		return g_power_save_mode.load(std::memory_order_relaxed);
+	}
+
 	u32 get_max_threads()
 	{
 		const u32 max_threads = static_cast<u32>(g_cfg.core.llvm_threads);

@@ -3201,6 +3201,11 @@ extern "C" void _rpcsx_setMaxCompileThreads(int count) {
   rpcs3::utils::set_compile_thread_cap(count > 0 ? static_cast<u32>(count) : 0u);
 }
 
+// Android battery-saver toggle (see rpcs3::utils::get_power_save_mode).
+extern "C" void _rpcsx_setPowerSaveMode(int on) {
+  rpcs3::utils::set_power_save_mode(on != 0);
+}
+
 extern "C" std::string _rpcsx_getVersion() {
   return rx::getVersion().toString();
 }

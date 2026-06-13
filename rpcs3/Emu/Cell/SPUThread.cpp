@@ -5,6 +5,7 @@
 #include "Emu/Memory/vm.h"
 #include "Emu/Memory/vm_ptr.h"
 #include "Emu/Memory/vm_reservation.h"
+#include "Emu/system_utils.hpp"
 
 #include "Loader/ELF.h"
 #include "Emu/VFS.h"
@@ -4622,7 +4623,14 @@ bool spu_thread::process_mfc_cmd()
 									// Hidden value to force busy waiting (100 to 1 are dynamically adjusted, 0 is not)
 									if (!g_cfg.core.spu_getllar_spin_optimization_disabled)
 									{
-										const u32 percent = g_cfg.core.spu_getllar_busy_waiting_percentage;
+										u32 percent = g_cfg.core.spu_getllar_busy_waiting_percentage;
+
+										// Android battery-saver: collapse the busy-wait window so idle SPU
+										// reservation polls take the OS sleep instead of pinning a big core.
+										if (rpcs3::utils::get_power_save_mode())
+										{
+											percent = std::min<u32>(percent, 3);
+										}
 
 										// Predict whether or not to use operating system sleep based on history
 										auto& stats = getllar_wait_time[(addr % SPU_LS_SIZE) / 128];

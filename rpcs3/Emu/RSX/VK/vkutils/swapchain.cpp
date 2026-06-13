@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "swapchain.h"
+#include "Emu/system_utils.hpp"
 
 namespace vk
 {
@@ -263,7 +264,9 @@ namespace vk
 		VkPresentModeKHR swapchain_present_mode = VK_PRESENT_MODE_FIFO_KHR;
 		std::vector<VkPresentModeKHR> preferred_modes;
 
-		if (!g_cfg.video.vk.force_fifo)
+		// Android battery-saver forces FIFO (cap the GPU to the display refresh)
+		// regardless of the saved config.
+		if (!g_cfg.video.vk.force_fifo && !rpcs3::utils::get_power_save_mode())
 		{
 			// List of preferred modes in decreasing desirability
 			// NOTE: Always picks "triple-buffered vsync" types if possible

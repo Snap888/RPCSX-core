@@ -710,7 +710,9 @@ namespace rsx
 			state_signals[NV4097_SET_ALPHA_FUNC] = rsx::fragment_state_dirty;
 			state_signals[NV4097_SET_ALPHA_REF] = rsx::fragment_state_dirty;
 			state_signals[NV4097_SET_ALPHA_TEST_ENABLE] = rsx::fragment_state_dirty;
-			state_signals[NV4097_SET_ANTI_ALIASING_CONTROL] = rsx::fragment_state_dirty | rsx::pipeline_config_dirty;
+			// NV4097_SET_ANTI_ALIASING_CONTROL now has an explicit method handler
+			// (nv4097::set_aa_control); FIFO dispatch is method-OR-signal, so the
+			// signal here would be dead and only trips the boot sanity-check warning.
 			state_signals[NV4097_SET_SHADER_PACKER] = rsx::fragment_state_dirty;
 			state_signals[NV4097_SET_SHADER_WINDOW] = rsx::fragment_state_dirty;
 			state_signals[NV4097_SET_FOG_MODE] = rsx::fragment_state_dirty;
