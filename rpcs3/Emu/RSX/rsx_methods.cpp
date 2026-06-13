@@ -1650,6 +1650,7 @@ namespace rsx
 		bind(NV4097_SET_CONTEXT_DMA_ZETA, nv4097::set_surface_dirty_bit);
 		bind(NV4097_NOTIFY, nv4097::set_notify);
 		bind(NV4097_SET_SURFACE_FORMAT, nv4097::set_surface_format);
+		bind(NV4097_SET_ANTI_ALIASING_CONTROL, nv4097::set_aa_control);
 		bind(NV4097_SET_SURFACE_PITCH_A, nv4097::set_surface_dirty_bit);
 		bind(NV4097_SET_SURFACE_PITCH_B, nv4097::set_surface_dirty_bit);
 		bind(NV4097_SET_SURFACE_PITCH_C, nv4097::set_surface_dirty_bit);

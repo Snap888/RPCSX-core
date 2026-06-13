@@ -1517,11 +1517,25 @@ error_code sys_fs_stat(ppu_thread &ppu, vm::cptr<char> path,
 
   if (!fs::get_stat(local_path, info)) {
     switch (auto error = fs::g_tls_error) {
+    case fs::error::notdir: {
+      return {CELL_ENOTDIR, path};
+    }
     case fs::error::noent: {
       // Try to analyse split file (TODO)
       u64 total_size = 0;
 
-      for (u32 i = 66601; i <= 66699; i++) {
+      // Use attributes from the first fragment (consistently with
+      // sys_fs_open+fstat)
+      fs::stat_t info_split{};
+      if (mp != &g_mp_sys_dev_hdd1 &&
+          fs::get_stat(local_path + ".66600", info_split) &&
+          !info_split.is_directory) {
+        total_size += info_split.size;
+      }
+
+      for (u32 i = 66601; total_size && i <= 66699; i++) {
+        info = {};
+
         if (fs::get_stat(fmt::format("%s.%u", local_path, i), info) &&
             !info.is_directory) {
           total_size += info.size;
@@ -1530,11 +1544,10 @@ error_code sys_fs_stat(ppu_thread &ppu, vm::cptr<char> path,
         }
       }
 
-      // Use attributes from the first fragment (consistently with
-      // sys_fs_open+fstat)
-      if (fs::get_stat(local_path + ".66600", info) && !info.is_directory) {
+      if (total_size) {
         // Success
-        info.size += total_size;
+        info_split.size = total_size;
+        info = info_split;
         break;
       }
 
@@ -1542,6 +1555,9 @@ error_code sys_fs_stat(ppu_thread &ppu, vm::cptr<char> path,
               CELL_ENOENT, path};
     }
     default: {
+      if (has_non_directory_components(local_path)) {
+        return {CELL_ENOTDIR, path};
+      }
       sys_fs.error("sys_fs_stat(): unknown error %s", error);
       return {CELL_EIO, path};
     }
@@ -2825,15 +2841,11 @@ error_code sys_fs_chmod(ppu_thread &, vm::cptr<char> path, s32 mode) {
 
   if (!fs::get_stat(local_path, info)) {
     switch (auto error = fs::g_tls_error) {
+    case fs::error::notdir: {
+      return {CELL_ENOTDIR, path};
+    }
     case fs::error::noent: {
       // Try to locate split files
-
-      for (u32 i = 66601; i <= 66699; i++) {
-        if (!fs::get_stat(fmt::format("%s.%u", local_path, i), info) &&
-            !info.is_directory) {
-          break;
-        }
-      }
 
       if (fs::get_stat(local_path + ".66600", info) && !info.is_directory) {
         break;
@@ -2842,6 +2854,9 @@ error_code sys_fs_chmod(ppu_thread &, vm::cptr<char> path, s32 mode) {
       return {CELL_ENOENT, path};
     }
     default: {
+      if (has_non_directory_components(local_path)) {
+        return {CELL_ENOTDIR, path};
+      }
       sys_fs.error("sys_fs_chmod(): unknown error %s", error);
       return {CELL_EIO, path};
     }

@@ -275,6 +275,17 @@ error_code sys_event_queue_destroy(ppu_thread &ppu, u32 equeue_id, s32 mode) {
           return CELL_EBUSY;
         }
 
+        // Bail on an again-flagged waiter BEFORE destroying state: idm::withdraw
+        // keeps the object on a truthy CellError, so running on_id_destroy first
+        // (decrementing exists, dropping the IPC key) would half-destroy the
+        // queue when the destroy is replayed on a savestate reload.
+        for (auto cpu = head; cpu; cpu = cpu->get_next_cpu()) {
+          if (cpu->state & cpu_flag::again) {
+            ppu.state += cpu_flag::again;
+            return CELL_EAGAIN;
+          }
+        }
+
         if (!queue.events.empty()) {
           // Copy events for logging, does not empty
           events.insert(events.begin(), queue.events.begin(),
@@ -285,13 +296,6 @@ error_code sys_event_queue_destroy(ppu_thread &ppu, u32 equeue_id, s32 mode) {
 
         if (!head) {
           qlock.unlock();
-        } else {
-          for (auto cpu = head; cpu; cpu = cpu->get_next_cpu()) {
-            if (cpu->state & cpu_flag::again) {
-              ppu.state += cpu_flag::again;
-              return CELL_EAGAIN;
-            }
-          }
         }
 
         return {};

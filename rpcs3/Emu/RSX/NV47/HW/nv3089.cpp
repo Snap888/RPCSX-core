@@ -189,7 +189,11 @@ namespace rsx
 			const u32 in_offset = in_x * in_bpp + in_pitch * in_y;
 			const u32 out_offset = out_x * out_bpp + out_pitch * out_y;
 
-			const u32 src_line_length = (in_w * in_bpp);
+			// Clamp the per-line source span to what the clipped/scaled blit
+			// actually consumes, so read_barrier/copy don't over-read the source
+			// (upstream 100a402cd). Our full-extent get_address bounds guards below
+			// stay - they are stronger than upstream's.
+			const u32 src_line_length = (std::min<u32>(in_w, in_x + static_cast<u32>(std::ceil(clip_w / scale_x))) * in_bpp);
 
 			u32 src_address = 0;
 			// Validate the full destination extent (clip_h output rows at out_pitch,

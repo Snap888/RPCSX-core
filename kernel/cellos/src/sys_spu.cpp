@@ -1562,6 +1562,9 @@ error_code sys_spu_thread_group_get_priority(ppu_thread &ppu, u32 id,
 
   if (!group->has_scheduler_context) {
     *priority = 0;
+  } else if (group->type & SYS_SPU_THREAD_GROUP_TYPE_COOPERATE_WITH_SYSTEM) {
+    // Regardless of the value being set in group creation
+    *priority = 15;
   } else {
     *priority = group->prio.load().prio;
   }
