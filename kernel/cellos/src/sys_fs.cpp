@@ -115,6 +115,31 @@ bool has_fs_write_rights(std::string_view vpath) {
   return true;
 }
 
+// Walk a path's parent components; if any component that should be a directory
+// is actually a non-directory (e.g. opening "afile/sub"), the real PS3 returns
+// CELL_ENOTDIR. Ported from upstream RPCS3 so open_raw can map this error
+// faithfully instead of collapsing it to CELL_EIO.
+bool has_non_directory_components(std::string_view path) {
+  std::string path0{path};
+
+  while (true) {
+    const std::string sub_path = fs::get_parent_dir(path0);
+
+    if (sub_path.size() >= path0.size()) {
+      break;
+    }
+
+    fs::stat_t stat{};
+    if (fs::get_stat(sub_path, stat)) {
+      return !stat.is_directory;
+    }
+
+    path0 = std::move(sub_path);
+  }
+
+  return false;
+}
+
 bool verify_mself(const fs::file &mself_file) {
   FsMselfHeader mself_header;
   if (!mself_file.read<FsMselfHeader>(mself_header)) {
@@ -746,7 +771,7 @@ error_code sys_fs_test(ppu_thread &, u32 arg1, u32 arg2, vm::ptr<u32> arg3,
 }
 
 lv2_file::open_raw_result_t lv2_file::open_raw(const std::string &local_path,
-                                               s32 flags, s32 /*mode*/,
+                                               s32 flags, bool has_write_access,
                                                lv2_file_type type,
                                                const lv2_fs_mount_info &mp) {
   // TODO: other checks for path
@@ -778,7 +803,7 @@ lv2_file::open_raw_result_t lv2_file::open_raw(const std::string &local_path,
     }
   }
 
-  if (flags & CELL_FS_O_CREAT) {
+  if (flags & CELL_FS_O_CREAT && !mp.read_only) {
     open_mode += fs::create;
 
     if (flags & CELL_FS_O_EXCL) {
@@ -786,7 +811,7 @@ lv2_file::open_raw_result_t lv2_file::open_raw(const std::string &local_path,
     }
   }
 
-  if (flags & CELL_FS_O_TRUNC) {
+  if (flags & CELL_FS_O_TRUNC && !mp.read_only) {
     open_mode += fs::trunc;
   }
 
@@ -804,7 +829,7 @@ lv2_file::open_raw_result_t lv2_file::open_raw(const std::string &local_path,
         flags);
   }
 
-  if (mp.read_only) {
+  if (mp.read_only || !has_write_access) {
     // Deactivate mutating flags on read-only FS
     open_mode = fs::read;
   }
@@ -832,7 +857,8 @@ lv2_file::open_raw_result_t lv2_file::open_raw(const std::string &local_path,
 
   fs::file file(local_path, open_mode);
 
-  if (!file && open_mode == fs::read && fs::g_tls_error == fs::error::noent) {
+  if (!file && open_mode == fs::read && fs::g_tls_error == fs::error::noent &&
+      mp.mp != &g_mp_sys_dev_hdd1) {
     // Try to gather split file (TODO)
     std::vector<fs::file> fragments;
 
@@ -850,10 +876,10 @@ lv2_file::open_raw_result_t lv2_file::open_raw(const std::string &local_path,
   }
 
   if (!file) {
-    if (mp.read_only) {
+    if (mp.read_only || !has_write_access) {
       // Failed to create file on read-only FS (file doesn't exist)
-      if (flags & CELL_FS_O_ACCMODE && flags & CELL_FS_O_CREAT) {
-        return {CELL_EPERM};
+      if (flags & CELL_FS_O_CREAT) {
+        return {mp.read_only ? CELL_EPERM : CELL_EACCES};
       }
     }
 
@@ -862,13 +888,23 @@ lv2_file::open_raw_result_t lv2_file::open_raw(const std::string &local_path,
     }
 
     switch (auto error = fs::g_tls_error) {
+    case fs::error::notdir:
+      return {CELL_ENOTDIR};
     case fs::error::noent:
       return {CELL_ENOENT};
+    case fs::error::isdir:
+      return {CELL_EISDIR};
     default:
-      sys_fs.error("lv2_file::open(): unknown error %s", error);
-    }
+      if (has_non_directory_components(local_path)) {
+        return {CELL_ENOTDIR};
+      }
 
-    return {CELL_EIO};
+      fmt::throw_exception("unknown error %s", error);
+    }
+  }
+
+  if (flags & CELL_FS_O_TRUNC && (mp.read_only || !has_write_access)) {
+    return {mp.read_only ? CELL_EPERM : CELL_EACCES};
   }
 
   if (flags & CELL_FS_O_MSELF && !verify_mself(file)) {
@@ -953,7 +989,7 @@ lv2_file::open_raw_result_t lv2_file::open_raw(const std::string &local_path,
 }
 
 lv2_file::open_result_t lv2_file::open(std::string_view vpath, s32 flags,
-                                       s32 mode, const void *arg, u64 size) {
+                                       s32 /*mode*/, const void *arg, u64 size) {
   if (vpath.empty()) {
     return {CELL_ENOENT};
   }
@@ -992,7 +1028,7 @@ lv2_file::open_result_t lv2_file::open(std::string_view vpath, s32 flags,
     }
   }
 
-  auto [error, file] = open_raw(local_path, flags, mode, type, mp);
+  auto [error, file] = open_raw(local_path, flags, has_fs_write_rights(vpath), type, mp);
 
   return {.error = error,
           .ppath = std::move(path),
