@@ -3893,6 +3893,17 @@ game_boot_result Emulator::Restart(bool graceful)
 
 	Emu.after_kill_callback = [this]
 	{
+		// Re-run Init() before reloading: Kill() resets g_fxo, which destroys the
+		// VFS mount table, and Load() only re-mounts the game devices (/dev_bdvd,
+		// /app_home) - not the firmware devices (/dev_hdd0, /dev_flash*) that
+		// Init() mounts. Without this, reloading a savestate that has LLE-loaded
+		// firmware modules (real .sprx) fails to reopen them in lv2_prx::load
+		// ("Verification failed" at the missing-file branch) and aborts. A normal
+		// boot avoids this because BootGame() calls Init() before Load(); loading
+		// a savestate from a file does too. The in-place home-menu savestate was
+		// the only path that skipped it.
+		Init();
+
 		// Reload with prior configs.
 		if (const auto error = Load(m_title_id); error != game_boot_result::no_errors)
 		{

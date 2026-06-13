@@ -346,6 +346,14 @@ std::function<void(void *)> lv2_prx::load(utils::serial &ar) {
 
       ensure(prx);
     } else {
+      // The PRX file could not be reopened to restore an LLE module. Log the
+      // resolved path so any path/mount regression is diagnosable instead of a
+      // bare "Verification failed". (The usual cause - the firmware VFS mounts
+      // missing on a savestate reload - is fixed in Emulator::Restart.)
+      sys_prx.error(
+          "lv2_prx::load: failed to reopen module file '%s' (offset=0x%x). "
+          "Savestate load cannot restore this LLE module.",
+          path, offset);
       ensure(g_cfg.savestate.state_inspection_mode.get());
 
       hle_load();
