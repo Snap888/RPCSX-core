@@ -1081,7 +1081,10 @@ struct ProgressMessageDialog : MsgDialogBase {
     max = 100;
     invokeSync([this, &msg](JNIEnv *env) {
       Progress progress(env, progressId);
-      progress.report(0, 0, msg);
+      // Determinate from the start (max != 0) so the long compile shows a real
+      // percentage instead of an indeterminate spinner. The progress server
+      // then drives 0..100 via ProgressBarSetValue.
+      progress.report(0, max, msg);
     });
   }
 
@@ -1093,7 +1096,8 @@ struct ProgressMessageDialog : MsgDialogBase {
     rpcsx_android.warning("ProgressMessageDialog::Close(%s)", success);
     invokeSync([this](JNIEnv *env) {
       Progress progress(env, progressId);
-      progress.report(0, 0);
+      // Report complete instead of resetting to an indeterminate (0,0).
+      progress.report(max, max);
     });
 
     //   Progress progress(env, progressId);
@@ -1353,7 +1357,9 @@ public:
   }
 
   void push(Progress &progress, std::string path) {
-    progress.report(0, 0);
+    // Keep the bar determinate (0%, queued) until the compile dialog drives it,
+    // rather than flipping it to an indeterminate spinner while it waits.
+    progress.report(0, 100);
 
     push({
         .progressId = progress.getProgressId(),
@@ -2959,30 +2965,118 @@ extern "C" bool _rpcsx_customConfigSet(std::string_view serial,
   return true;
 }
 
-// Import a full config (a YAML string) as a game's custom config. Used for the
-// one-tap community config: the value is validated/normalized against our
-// schema before being saved, so a malformed download cannot break boot.
+// Import a community/recommended config (a sparse YAML string) as a game's
+// custom config. The preset specifies only the keys it changes; we persist
+// ONLY those keys (each validated against the schema) so every unmentioned
+// setting keeps inheriting the user's live globals at boot - exactly like
+// manual per-game edits. A full snapshot would pin every setting and make
+// community configs perform worse than setting the same options by hand.
 extern "C" bool _rpcsx_customConfigImport(std::string_view serial,
                                           std::string_view yaml) {
   if (serial.empty()) {
     return false;
   }
 
-  // Seed from the user's CURRENT globals, then overlay the community preset.
-  // Previously this started from schema defaults, so every setting the preset
-  // didn't mention was pinned to a default - silently discarding the user's
-  // own global tuning and making community configs perform worse than setting
-  // the same options by hand. Now unmentioned settings keep the user's values.
-  cfg_root cfg;
-  cfg.from_string(g_cfg.to_string());
+  YAML::Node incoming;
+  try {
+    incoming = YAML::Load(std::string(yaml));
+  } catch (...) {
+    rpcsx_android.error("customConfigImport: unparseable YAML for %s", serial);
+    return false;
+  }
+  if (!incoming.IsMap()) {
+    rpcsx_android.error("customConfigImport: top-level YAML is not a map for %s",
+                        serial);
+    return false;
+  }
 
-  if (!cfg.from_string(std::string(yaml))) {
-    rpcsx_android.error("customConfigImport: invalid config for %s", serial);
+  // Merge into any existing custom file so re-importing doesn't drop prior
+  // sparse edits (matches customConfigSet).
+  YAML::Node yaml_root;
+  if (fs::file f{rpcs3::utils::get_custom_config_path(std::string(serial))}) {
+    try {
+      yaml_root = YAML::Load(f.to_string());
+    } catch (...) {
+      rpcsx_android.error(
+          "customConfigImport: existing custom config unreadable, recreating");
+    }
+  }
+  if (!yaml_root.IsMap()) {
+    yaml_root = YAML::Node(YAML::NodeType::Map);
+  }
+
+  // Validate each leaf against the live schema (seeded from globals so enum/
+  // range checks match what boot uses). Only validated keys get written.
+  cfg_root validator;
+  validator.from_string(g_cfg.to_string());
+
+  bool wrote_any = false;
+
+  std::function<void(const YAML::Node &, const std::string &)> walk =
+      [&](const YAML::Node &node, const std::string &prefix) {
+        if (!node.IsMap()) {
+          return;
+        }
+        for (const auto &kv : node) {
+          if (!kv.first.IsScalar()) {
+            continue;
+          }
+          const std::string key = kv.first.Scalar();
+          const std::string path = prefix.empty() ? key : prefix + "@@" + key;
+
+          if (kv.second.IsMap()) {
+            walk(kv.second, path);
+            continue;
+          }
+          if (!kv.second.IsScalar()) {
+            continue;
+          }
+
+          auto schema = find_cfg_node(&validator, path);
+          if (schema == nullptr) {
+            rpcsx_android.error("customConfigImport: unknown key '%s' skipped",
+                                path);
+            continue;
+          }
+
+          const std::string scalar = kv.second.Scalar();
+          if (!schema->from_string(scalar, false)) {
+            rpcsx_android.error(
+                "customConfigImport: value '%s' rejected for key '%s'", scalar,
+                path);
+            continue;
+          }
+
+          // Write the validated scalar into the sparse output tree.
+          const auto pathList = fmt::split(path, {"@@"});
+          YAML::Node cur;
+          cur.reset(yaml_root);
+          for (usz i = 0; i < pathList.size(); i++) {
+            if (i + 1 == pathList.size()) {
+              cur[pathList[i]] = scalar;
+              break;
+            }
+            YAML::Node next = cur[pathList[i]];
+            if (!next.IsMap()) {
+              cur[pathList[i]] = YAML::Node(YAML::NodeType::Map);
+              next.reset(cur[pathList[i]]);
+            }
+            cur.reset(next);
+          }
+          wrote_any = true;
+        }
+      };
+
+  walk(incoming, "");
+
+  if (!wrote_any) {
+    rpcsx_android.error("customConfigImport: no valid keys in preset for %s",
+                        serial);
     return false;
   }
 
   ensure_custom_config_dir();
-  Emulator::SaveSettings(cfg.to_string(), std::string(serial));
+  Emulator::SaveSettings(YAML::Dump(yaml_root) + "\n", std::string(serial));
   return _rpcsx_customConfigExists(serial);
 }
 
