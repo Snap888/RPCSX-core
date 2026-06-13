@@ -6645,7 +6645,7 @@ bool spu_thread::set_ch_value(u32 ch, u32 value)
 	fmt::throw_exception("Unknown/illegal channel in WRCH (ch=%d [%s], value=0x%x)", ch, ch < 128 ? spu_ch_name[ch] : "???", value);
 }
 
-extern void resume_spu_thread_group_from_waiting(spu_thread& spu)
+extern void resume_spu_thread_group_from_waiting(spu_thread& spu, std::array<shared_ptr<named_thread<spu_thread>>, 8>& notify_spus)
 {
 	const auto group = spu.group;
 
@@ -6659,7 +6659,7 @@ extern void resume_spu_thread_group_from_waiting(spu_thread& spu)
 	{
 		group->run_state = SPU_THREAD_GROUP_STATUS_SUSPENDED;
 		spu.state += cpu_flag::signal;
-		spu.state.notify_one();
+		ensure(spu.state & cpu_flag::suspend);
 		return;
 	}
 
@@ -6677,7 +6677,11 @@ extern void resume_spu_thread_group_from_waiting(spu_thread& spu)
 				thread->state -= cpu_flag::suspend;
 			}
 
-			thread->state.notify_one();
+			// Defer the wakeup until the caller has released the queue/group
+			// mutexes (see notify_spus_t in sys_event.cpp). Notifying here, under
+			// the locks, lets a woken SPU on a slow core immediately re-contend on
+			// the still-held mutex and re-sleep - a lost/delayed-wakeup window.
+			notify_spus[group->threads_map[thread->index]] = thread;
 		}
 	}
 }
