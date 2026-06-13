@@ -267,7 +267,9 @@ constexpr u32 clz128(u128 arg) {
 
 inline void pause() {
 #if defined(ARCH_ARM64)
-  __asm__ volatile("yield");
+  // 'isb' actually stalls the pipeline on the in-order/low-SMT cores in phones,
+  // unlike 'yield' which is close to a no-op there. Matches upstream.
+  __asm__ volatile("isb" ::: "memory");
 #elif defined(_M_X64)
   _mm_pause();
 #elif defined(ARCH_X64)
@@ -279,9 +281,33 @@ inline void pause() {
 
 inline void yield() { std::this_thread::yield(); }
 
+// The hardware clock on many arm timers runs south of 100MHz, while RPCS3's
+// busy waits were written assuming an x86 timer around 3GHz. On e.g. the
+// Snapdragon 8 Gen 2 cntvct_el0 ticks at 19.2MHz, so a busy_wait sized in
+// "x86 cycles" spun for tens to hundreds of microseconds instead of nanoseconds
+// - pathological under contention and far worse on slower phones. Scale the
+// cycle count to the actual timer frequency (see init_arm_timer_scale).
+#if defined(ARCH_ARM64)
+inline u64 arm_timer_scale = 1;
+
+inline void init_arm_timer_scale() {
+  u64 freq = 0;
+  __asm__ volatile("mrs %0, cntfrq_el0" : "=r"(freq));
+
+  // Scale the hardware timer toward a 3GHz-equivalent baseline.
+  u64 timer_scale = freq / 30000000;
+  if (timer_scale)
+    arm_timer_scale = timer_scale;
+}
+#endif
+
 // Synchronization helper (cache-friendly busy waiting)
 inline void busy_wait(usz cycles = 3000) {
+#if defined(ARCH_ARM64)
+  const u64 stop = get_tsc() + ((cycles / 100) * arm_timer_scale);
+#else
   const u64 stop = get_tsc() + cycles;
+#endif
   do
     pause();
   while (get_tsc() < stop);

@@ -1842,6 +1842,13 @@ extern "C" bool _rpcsx_initialize(std::string_view rootDir,
 
   g_initialized = true;
 
+#if defined(ARCH_ARM64)
+  // Calibrate busy_wait() to this device's hardware timer frequency before any
+  // emulation spins. Without this, busy waits sized in x86-equivalent cycles
+  // ran ~100x too long on phone timers (~19MHz vs the assumed ~3GHz).
+  rx::init_arm_timer_scale();
+#endif
+
   if (int r = libusb_set_option(nullptr, LIBUSB_OPTION_NO_DEVICE_DISCOVERY,
                                 nullptr);
       r != 0) {
