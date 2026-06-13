@@ -615,6 +615,7 @@ struct GameInfo {
   std::string iconPath;
   int flags = 0;
   std::string version;
+  std::string titleId;
 };
 
 class Progress {
@@ -672,11 +673,11 @@ static void sendGameInfo(JNIEnv *env, jlong progressId,
       gameRepositoryClass, "add", "([Lnet/rpcsx/GameInfo;J)V"));
   auto gameClass = ensure(env->FindClass("net/rpcsx/GameInfo"));
 
-  // Prefer the 5-arg constructor (with the game version); fall back to the
+  // Prefer the 6-arg constructor (game version + title id); fall back to the
   // legacy 4-arg one so a new core keeps working with an older app.
   jmethodID gameConstructorV2 = env->GetMethodID(
       gameClass, "<init>",
-      "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;)V");
+      "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;Ljava/lang/String;)V");
   if (gameConstructorV2 == nullptr) {
     env->ExceptionClear();
   }
@@ -700,7 +701,7 @@ static void sendGameInfo(JNIEnv *env, jlong progressId,
       objects.push_back(env->NewObject(
           gameClass, gameConstructorV2, wrap(env, path), wrap(env, info.name),
           wrap(env, Emu.GetCallbacks().resolve_path(info.iconPath)),
-          jint(info.flags), wrap(env, info.version)));
+          jint(info.flags), wrap(env, info.version), wrap(env, info.titleId)));
     } else {
       objects.push_back(env->NewObject(
           gameClass, gameConstructor, wrap(env, path), wrap(env, info.name),
@@ -924,12 +925,28 @@ fetchGameInfo(const psf::registry &psf,
     }
   }
 
+  // Prefer an installed game update's version (dev_hdd0/game/<id>/PARAM.SFO)
+  // over the disc/base version - that's the effective version the game runs at
+  // once an update is installed. For HDD games this is the same file (no-op).
+  if (!titleId.empty()) {
+    const auto updateSfo =
+        rpcs3::utils::get_hdd0_dir() + "game/" + titleId + "/PARAM.SFO";
+    if (fs::is_file(updateSfo)) {
+      auto upd = psf::load_object(updateSfo);
+      auto updVer = std::string(psf::get_string(upd, "APP_VER", ""));
+      if (!updVer.empty()) {
+        version = std::move(updVer);
+      }
+    }
+  }
+
   return GameInfo{
       .path = std::move(path),
       .name = std::move(name),
       .iconPath = std::move(iconPath),
       .flags = flags,
       .version = std::move(version),
+      .titleId = std::move(titleId),
   };
 }
 
@@ -1460,22 +1477,30 @@ private:
       }
     }
 
-    std::vector<ppu_module<lv2_obj> *> mod_list;
-    rpcsx_android.error("Going to analyze executable");
+    // Honor the "LLVM Precompilation" toggle for install-time precompile too
+    // (it already gates boot-time precompile). With it off, installing - incl.
+    // batch folder installs - skips the long up-front compile; code is then
+    // compiled lazily on first boot instead. Nothing is lost, only deferred.
+    if (g_cfg.core.llvm_precompilation) {
+      std::vector<ppu_module<lv2_obj> *> mod_list;
+      rpcsx_android.error("Going to analyze executable");
 
-    // FIXME: split states
-    if (!is_vsh) {
-      if (_main.analyse(0, _main.elf_entry, _main.seg0_code_end,
-                        _main.applied_patches, std::vector<u32>{})) {
-        Emu.ConfigurePPUCache();
-        Emu.SetTestMode();
-        rpcsx_android.error("Going to precompile main PPU module");
-        ppu_initialize(_main);
-        mod_list.emplace_back(&_main);
+      // FIXME: split states
+      if (!is_vsh) {
+        if (_main.analyse(0, _main.elf_entry, _main.seg0_code_end,
+                          _main.applied_patches, std::vector<u32>{})) {
+          Emu.ConfigurePPUCache();
+          Emu.SetTestMode();
+          rpcsx_android.error("Going to precompile main PPU module");
+          ppu_initialize(_main);
+          mod_list.emplace_back(&_main);
+        }
       }
-    }
 
-    ppu_precompile(dir_queue, mod_list.empty() ? nullptr : &mod_list);
+      ppu_precompile(dir_queue, mod_list.empty() ? nullptr : &mod_list);
+    } else {
+      rpcsx_android.error("Skipping install-time precompile (LLVM Precompilation disabled)");
+    }
 
     rpcsx_android.error("Finalization");
     g_fxo->reset();
@@ -2301,7 +2326,7 @@ static bool installPkg(JNIEnv *env, fs::file &&file, jlong progressId) {
       return false;
     }
 
-    std::this_thread::sleep_for(std::chrono::seconds(2));
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
   }
 
   if (worker()) {
@@ -2943,7 +2968,14 @@ extern "C" bool _rpcsx_customConfigImport(std::string_view serial,
     return false;
   }
 
+  // Seed from the user's CURRENT globals, then overlay the community preset.
+  // Previously this started from schema defaults, so every setting the preset
+  // didn't mention was pinned to a default - silently discarding the user's
+  // own global tuning and making community configs perform worse than setting
+  // the same options by hand. Now unmentioned settings keep the user's values.
   cfg_root cfg;
+  cfg.from_string(g_cfg.to_string());
+
   if (!cfg.from_string(std::string(yaml))) {
     rpcsx_android.error("customConfigImport: invalid config for %s", serial);
     return false;
