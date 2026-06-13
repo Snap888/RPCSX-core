@@ -1112,6 +1112,12 @@ error_code sys_spu_thread_group_suspend(ppu_thread &ppu, u32 id) {
     return CELL_EINVAL;
   }
 
+  // System-cooperative (SPURS-managed) groups must not be suspended by the
+  // guest - real PS3 rejects this with EINVAL. Our snapshot dropped this guard.
+  if (group->type & SYS_SPU_THREAD_GROUP_TYPE_COOPERATE_WITH_SYSTEM) {
+    return CELL_EINVAL;
+  }
+
   std::lock_guard lock(group->mutex);
 
   CellError error;
@@ -1177,6 +1183,12 @@ error_code sys_spu_thread_group_resume(ppu_thread &ppu, u32 id) {
   }
 
   if (!group->has_scheduler_context || group->type & 0xf00) {
+    return CELL_EINVAL;
+  }
+
+  // System-cooperative (SPURS-managed) groups must not be resumed by the guest
+  // either - real PS3 rejects this with EINVAL. Our snapshot dropped this guard.
+  if (group->type & SYS_SPU_THREAD_GROUP_TYPE_COOPERATE_WITH_SYSTEM) {
     return CELL_EINVAL;
   }
 
