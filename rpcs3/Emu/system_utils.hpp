@@ -34,6 +34,13 @@ namespace rpcs3::utils
 	void set_power_save_mode(bool on);
 	bool get_power_save_mode();
 
+	// Android thermal throttle: a frame-rate cap (fps) applied when the SoC gets
+	// hot, so the pipeline does less work and the device can cool (less fan / less
+	// hard-throttle stutter). 0 = no cap (default). The app sets it from
+	// PowerManager thermal status; it's clamped against the configured frame limit.
+	void set_thermal_frame_cap(float fps);
+	float get_thermal_frame_cap();
+
 	void configure_logs(bool force_enable = false);
 
 	u32 check_user(const std::string& user);

@@ -15,6 +15,7 @@
 #include "RSXDisAsm.h"
 
 #include "Emu/System.h"
+#include "Emu/system_utils.hpp"
 #include "Emu/Cell/PPUThread.h"
 #include "Emu/Cell/timers.hpp"
 #include "cellos/sys_event.h"
@@ -3265,6 +3266,13 @@ namespace rsx
 		{
 			// Apply a second limit
 			limit = limit2;
+		}
+
+		// Android thermal throttle: when the SoC is hot, cap the frame rate so the
+		// pipeline does less work and the device can cool (less fan / hard-throttle).
+		if (const double tcap = static_cast<double>(rpcs3::utils::get_thermal_frame_cap()); tcap >= 1.0 && (tcap < limit || !limit))
+		{
+			limit = tcap;
 		}
 
 		if (limit)

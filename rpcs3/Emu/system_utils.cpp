@@ -44,6 +44,18 @@ namespace rpcs3::utils
 		return g_power_save_mode.load(std::memory_order_relaxed);
 	}
 
+	static std::atomic<float> g_thermal_frame_cap{0.f};
+
+	void set_thermal_frame_cap(float fps)
+	{
+		g_thermal_frame_cap.store(fps > 0.f ? fps : 0.f, std::memory_order_relaxed);
+	}
+
+	float get_thermal_frame_cap()
+	{
+		return g_thermal_frame_cap.load(std::memory_order_relaxed);
+	}
+
 	u32 get_max_threads()
 	{
 		const u32 max_threads = static_cast<u32>(g_cfg.core.llvm_threads);

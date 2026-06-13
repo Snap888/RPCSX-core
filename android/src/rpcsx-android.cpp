@@ -3206,6 +3206,11 @@ extern "C" void _rpcsx_setPowerSaveMode(int on) {
   rpcs3::utils::set_power_save_mode(on != 0);
 }
 
+// Android thermal throttle: frame-rate cap (fps) when the SoC is hot; 0 = none.
+extern "C" void _rpcsx_setThermalFrameCap(float fps) {
+  rpcs3::utils::set_thermal_frame_cap(fps);
+}
+
 extern "C" std::string _rpcsx_getVersion() {
   return rx::getVersion().toString();
 }
