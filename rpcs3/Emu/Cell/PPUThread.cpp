@@ -3826,7 +3826,16 @@ extern bool ppu_stdcx(ppu_thread& ppu, u32 addr, u64 reg_value)
 
 struct jit_core_allocator
 {
-	const s16 thread_count = g_cfg.core.llvm_threads ? std::min<s32>(g_cfg.core.llvm_threads, limit()) : limit();
+	// Honour the Android low-RAM compile-thread cap (0 = no cap) so the
+	// concurrent-codegen semaphore - the real peak-memory bound during boot -
+	// never exceeds what the device can hold.
+	static s16 capped(s16 tc)
+	{
+		const u32 cap = rpcs3::utils::get_compile_thread_cap();
+		return cap ? std::min<s16>(tc, static_cast<s16>(cap)) : tc;
+	}
+
+	const s16 thread_count = capped(g_cfg.core.llvm_threads ? std::min<s32>(g_cfg.core.llvm_threads, limit()) : limit());
 
 	// Initialize global semaphore with the max number of threads
 	::semaphore<0x7fff> sem{std::max<s16>(thread_count, 1)};
@@ -4286,7 +4295,11 @@ extern void ppu_precompile(std::vector<std::string>& dir_queue, std::vector<ppu_
 
 	concurent_memory_limit memory_limit(utils::get_total_memory() / 3);
 
-	const u32 software_thread_limit = std::min<u32>(g_cfg.core.llvm_threads ? g_cfg.core.llvm_threads : u32{umax}, ::size32(file_queue));
+	u32 software_thread_limit = std::min<u32>(g_cfg.core.llvm_threads ? g_cfg.core.llvm_threads : u32{umax}, ::size32(file_queue));
+	if (const u32 cap = rpcs3::utils::get_compile_thread_cap(); cap > 0)
+	{
+		software_thread_limit = std::min<u32>(software_thread_limit, cap);
+	}
 	const u32 cpu_thread_limit = utils::get_thread_count() > 8u ? std::max<u32>(utils::get_thread_count(), 2) - 1 : utils::get_thread_count(); // One LLVM thread less
 
 	std::vector<u128> decrypt_klics;

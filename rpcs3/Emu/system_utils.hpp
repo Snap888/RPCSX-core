@@ -17,6 +17,15 @@ namespace rpcs3::utils
 {
 	u32 get_max_threads();
 
+	// Android low-RAM guard: hard cap on how many LLVM modules compile
+	// concurrently during first-boot recompilation, so the kernel low-memory
+	// killer does not SIGKILL the process mid-compile. 0 = no cap (default;
+	// desktop/high-RAM behaviour is byte-identical to upstream). The Android app
+	// sets this from device RAM via JNI; because it is applied to the *effective*
+	// thread count it cannot be undone by a global or per-game custom config.
+	void set_compile_thread_cap(u32 cap);
+	u32 get_compile_thread_cap();
+
 	void configure_logs(bool force_enable = false);
 
 	u32 check_user(const std::string& user);

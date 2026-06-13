@@ -12,6 +12,7 @@
 #include "Crypto/unself.h"
 #include "Crypto/unedat.h"
 
+#include <atomic>
 #include <charconv>
 #include <thread>
 
@@ -19,11 +20,30 @@ LOG_CHANNEL(sys_log, "SYS");
 
 namespace rpcs3::utils
 {
+	static std::atomic<u32> g_compile_thread_cap{0};
+
+	void set_compile_thread_cap(u32 cap)
+	{
+		g_compile_thread_cap.store(cap, std::memory_order_relaxed);
+	}
+
+	u32 get_compile_thread_cap()
+	{
+		return g_compile_thread_cap.load(std::memory_order_relaxed);
+	}
+
 	u32 get_max_threads()
 	{
 		const u32 max_threads = static_cast<u32>(g_cfg.core.llvm_threads);
 		const u32 hw_threads = ::utils::get_thread_count();
-		const u32 thread_count = max_threads > 0 ? std::min(max_threads, hw_threads) : hw_threads;
+		u32 thread_count = max_threads > 0 ? std::min(max_threads, hw_threads) : hw_threads;
+
+		// Apply the Android low-RAM compile-thread cap to the effective count.
+		if (const u32 cap = g_compile_thread_cap.load(std::memory_order_relaxed); cap > 0)
+		{
+			thread_count = std::min(thread_count, cap);
+		}
+
 		return thread_count;
 	}
 

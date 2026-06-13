@@ -3193,6 +3193,14 @@ extern "C" bool _rpcsx_settingsSet(std::string_view path,
   return true;
 }
 
+// Android low-RAM guard. Caps concurrent LLVM compile threads at the effective
+// thread-pool level (see rpcs3::utils::get_compile_thread_cap), so it survives
+// per-game custom configs that the global "Max LLVM Compile Threads" cannot. The
+// app derives the value from device RAM. 0 (or <=0) disables the cap.
+extern "C" void _rpcsx_setMaxCompileThreads(int count) {
+  rpcs3::utils::set_compile_thread_cap(count > 0 ? static_cast<u32>(count) : 0u);
+}
+
 extern "C" std::string _rpcsx_getVersion() {
   return rx::getVersion().toString();
 }
