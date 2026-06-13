@@ -505,6 +505,45 @@ error_code sys_spu_image_open(ppu_thread &ppu, vm::ptr<sys_spu_image> img,
   return CELL_OK;
 }
 
+error_code sys_spu_image_open_by_fd(ppu_thread &ppu, vm::ptr<sys_spu_image> img,
+                                    s32 fd, s64 offset) {
+  ppu.state += cpu_flag::wait;
+
+  sys_spu.warning("sys_spu_image_open_by_fd(img=*0x%x, fd=%d, offset=0x%x)", img,
+                  fd, offset);
+
+  const auto file = idm::get_unlocked<lv2_fs_object, lv2_file>(fd);
+
+  if (!file) {
+    return CELL_EBADF;
+  }
+
+  if (offset < 0) {
+    return CELL_ENOEXEC;
+  }
+
+  std::lock_guard lock(file->mp->mutex);
+
+  if (!file->file) {
+    return CELL_EBADF;
+  }
+
+  u128 klic = g_fxo->get<loaded_npdrm_keys>().last_key();
+
+  const fs::file elf_file = decrypt_self(lv2_file::make_view(file, offset),
+                                         reinterpret_cast<u8 *>(&klic));
+
+  if (!elf_file) {
+    sys_spu.error(
+        "sys_spu_image_open_by_fd(): file %s is illegal for SPU image!",
+        file->name.data());
+    return {CELL_ENOEXEC, file->name.data()};
+  }
+
+  img->load(elf_file);
+  return CELL_OK;
+}
+
 error_code _sys_spu_image_import(ppu_thread &ppu, vm::ptr<sys_spu_image> img,
                                  u32 src, u32 size, u32 arg4) {
   ppu.state += cpu_flag::wait;
