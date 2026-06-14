@@ -54,7 +54,17 @@ namespace rsx
 				// re-reads put + checks stop on every wake, so the worst case is a
 				// brief re-poll rather than a stall.
 				const u32* put_word = reinterpret_cast<const u32*>(&m_ctrl->put);
-				rx::wfe_park(put_word, *put_word);
+				const u32 keep = *put_word;
+				// Short hot spin first: at a frame boundary the CPU usually writes
+				// 'put' within microseconds. Catch that hot to avoid WFE wake latency
+				// (which showed up as frametime jitter); only park on sustained idle.
+				for (int i = 0; i < 8; i++)
+				{
+					if (*put_word != keep)
+						return;
+					rx::busy_wait();
+				}
+				rx::wfe_park(put_word, keep);
 				return;
 			}
 #endif

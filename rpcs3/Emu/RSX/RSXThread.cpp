@@ -882,6 +882,15 @@ namespace rsx
 			&& (state & (cpu_flag::dbg_global_pause + cpu_flag::exit)) != cpu_flag::dbg_global_pause)
 		{
 			on_semaphore_acquire_wait();
+			// Short hot spin first: most semaphore releases land within a few
+			// microseconds; catch them hot to avoid WFE wake latency (per-frame
+			// jitter), then park only if the wait is genuinely longer.
+			for (int i = 0; i < 8; i++)
+			{
+				if (*watch != keep)
+					return;
+				rx::busy_wait();
+			}
 			rx::wfe_park(watch, keep);
 			return;
 		}

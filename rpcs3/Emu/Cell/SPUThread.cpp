@@ -7456,9 +7456,10 @@ s64 spu_channel::pop_wait(cpu_thread& spu, bool pop)
 		return static_cast<u32>(old);
 	}
 
-	// Low-power: trim the optimistic pre-park spin (the futex wait below is the
-	// real wakeup; the spin only hides latency on a fast producer).
-	for (int i = 0, n = rpcs3::utils::low_power_wait_enabled() ? 2 : 10; i < n; i++)
+	// Keep the full optimistic pre-park spin: it is a cheap busy_wait and hides
+	// producer latency on the SPU mailbox/SNR path; trimming it caused audio
+	// stutter (SPU audio decode futex-parked too eagerly -> buffer underruns).
+	for (int i = 0; i < 10; i++)
 	{
 		rx::busy_wait();
 
@@ -7535,7 +7536,7 @@ bool spu_channel::push_wait(cpu_thread& spu, u32 value, bool push)
 			return true;
 		});
 
-	for (int i = 0, n = rpcs3::utils::low_power_wait_enabled() ? 2 : 10; i < n; i++)
+	for (int i = 0; i < 10; i++)
 	{
 		if (!(state & bit_wait))
 		{
@@ -7595,7 +7596,7 @@ std::pair<u32, u32> spu_channel_4_t::pop_wait(cpu_thread& spu, bool pop_value)
 
 	old.waiting = (pop_value ? bit_occupy : 0) | bit_wait;
 
-	for (int i = 0, n = rpcs3::utils::low_power_wait_enabled() ? 2 : 10; i < n; i++)
+	for (int i = 0; i < 10; i++)
 	{
 		rx::busy_wait();
 
