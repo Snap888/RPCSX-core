@@ -4627,9 +4627,10 @@ bool spu_thread::process_mfc_cmd()
 
 										// Android battery-saver: collapse the busy-wait window so idle SPU
 										// reservation polls take the OS sleep instead of pinning a big core.
+										// 0 = always sleep (routes to the existing futex park; no spin).
 										if (rpcs3::utils::get_power_save_mode())
 										{
-											percent = std::min<u32>(percent, 3);
+											percent = 0;
 										}
 
 										// Predict whether or not to use operating system sleep based on history
@@ -7455,7 +7456,9 @@ s64 spu_channel::pop_wait(cpu_thread& spu, bool pop)
 		return static_cast<u32>(old);
 	}
 
-	for (int i = 0; i < 10; i++)
+	// Low-power: trim the optimistic pre-park spin (the futex wait below is the
+	// real wakeup; the spin only hides latency on a fast producer).
+	for (int i = 0, n = rpcs3::utils::low_power_wait_enabled() ? 2 : 10; i < n; i++)
 	{
 		rx::busy_wait();
 
@@ -7532,7 +7535,7 @@ bool spu_channel::push_wait(cpu_thread& spu, u32 value, bool push)
 			return true;
 		});
 
-	for (int i = 0; i < 10; i++)
+	for (int i = 0, n = rpcs3::utils::low_power_wait_enabled() ? 2 : 10; i < n; i++)
 	{
 		if (!(state & bit_wait))
 		{
@@ -7592,7 +7595,7 @@ std::pair<u32, u32> spu_channel_4_t::pop_wait(cpu_thread& spu, bool pop_value)
 
 	old.waiting = (pop_value ? bit_occupy : 0) | bit_wait;
 
-	for (int i = 0; i < 10; i++)
+	for (int i = 0, n = rpcs3::utils::low_power_wait_enabled() ? 2 : 10; i < n; i++)
 	{
 		rx::busy_wait();
 
