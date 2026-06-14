@@ -843,8 +843,9 @@ narrow(const From &value,
   // different signedness of the same size
   if constexpr ((is_from_signed && !is_to_signed) || to_mask < from_mask) {
     // Try to optimize test if both are of the same signedness
-    if (is_from_signed != is_to_signed ? !!(value & mask)
-                                       : static_cast<CommonTo>(value) != value)
+    if (is_from_signed != is_to_signed
+            ? !!(value & mask)
+            : static_cast<CommonFrom>(static_cast<CommonTo>(value)) != value)
         [[unlikely]] {
       fmt::raw_verify_error(src_loc, u8"Narrowing error", +value);
     }

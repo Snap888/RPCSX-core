@@ -126,6 +126,7 @@ namespace fmt
 	}
 
 	std::vector<std::string> split(std::string_view source, std::initializer_list<std::string_view> separators, bool is_skip_empty = true);
+	std::vector<std::string_view> split_sv(std::string_view source, std::initializer_list<std::string_view> separators, bool is_skip_empty = true);
 	std::string trim(const std::string& source, std::string_view values = " \t");
 	std::string trim_front(const std::string& source, std::string_view values = " \t");
 	void trim_back(std::string& source, std::string_view values = " \t");
