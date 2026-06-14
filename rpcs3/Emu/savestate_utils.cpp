@@ -49,7 +49,13 @@ static std::array<serial_ver_t, 28> s_serial_versions;
 	}
 
 SERIALIZATION_VER(global_version, 0, 19) // For stuff not listed here
-SERIALIZATION_VER(ppu, 1, 1, 2 /*PPU sleep order*/, 3 /*PPU FNID and module*/, 4 /*PPU scalar registers (gpr/fpr/cr/...) - were never serialized on this fork*/)
+// Only version 4 is accepted: this fork never serialized PPU scalar registers
+// (gpr/fpr/cr/...) until now, so pre-4 savestates are register-less and would
+// desync the stream against the new unconditional serialization. Dropping 1-3
+// from the compatible set makes is_savestate_version_compatible reject them with
+// a clean "version not supported" message instead of crashing on load. The
+// version>=2/>=3 constructor gates still hold (loaded version is always 4).
+SERIALIZATION_VER(ppu, 1, 4 /*PPU scalar registers + sleep-order + FNID/module*/)
 SERIALIZATION_VER(spu, 2, 1)
 SERIALIZATION_VER(lv2_sync, 3, 1)
 SERIALIZATION_VER(lv2_vm, 4, 1)
