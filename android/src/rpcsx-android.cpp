@@ -3211,6 +3211,11 @@ extern "C" void _rpcsx_setThermalFrameCap(float fps) {
   rpcs3::utils::set_thermal_frame_cap(fps);
 }
 
+// Android experimental: bias PPU/SPU/RSX onto the big CPU cluster.
+extern "C" void _rpcsx_setCpuAffinityMode(int on) {
+  thread_ctrl::set_android_affinity(on != 0);
+}
+
 extern "C" std::string _rpcsx_getVersion() {
   return rx::getVersion().toString();
 }

@@ -1,4 +1,5 @@
 #include "stdafx.h"
+#include <cstdio>
 
 #include "rx/debug.hpp"
 #include "Emu/Cell/timers.hpp"
@@ -3120,9 +3121,86 @@ void thread_ctrl::detect_cpu_layout()
 	}
 }
 
+namespace
+{
+	std::atomic<bool> g_android_affinity{false};
+	std::atomic<u64> g_android_big_mask{0}; // 0 = unknown/disabled
+	std::atomic<bool> g_android_clusters_done{false};
+
+	// Big cluster = cores whose max frequency is above the lowest tier (the
+	// efficiency cores). 0 if detection fails or all cores are equal.
+	u64 detect_android_big_mask()
+	{
+		const u32 n = std::min<u32>(std::thread::hardware_concurrency(), 64u);
+		u64 freqs[64] = {};
+		u64 minf = ~0ull, maxf = 0;
+		for (u32 i = 0; i < n; i++)
+		{
+			char path[96];
+			std::snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpu%u/cpufreq/cpuinfo_max_freq", i);
+			if (std::FILE* f = std::fopen(path, "r"))
+			{
+				unsigned long long v = 0;
+				if (std::fscanf(f, "%llu", &v) == 1 && v)
+				{
+					freqs[i] = v;
+					minf = std::min<u64>(minf, v);
+					maxf = std::max<u64>(maxf, v);
+				}
+				std::fclose(f);
+			}
+		}
+		if (maxf == 0 || minf == maxf)
+		{
+			return 0;
+		}
+		u64 mask = 0;
+		for (u32 i = 0; i < n; i++)
+		{
+			if (freqs[i] > minf)
+			{
+				mask |= 1ull << i;
+			}
+		}
+		return mask;
+	}
+}
+
+void thread_ctrl::set_android_affinity(bool enable)
+{
+	g_android_affinity.store(enable, std::memory_order_relaxed);
+}
+
+bool thread_ctrl::android_affinity_enabled()
+{
+	return g_android_affinity.load(std::memory_order_relaxed);
+}
+
 u64 thread_ctrl::get_affinity_mask(thread_class group)
 {
 #ifdef ANDROID
+	if (g_android_affinity.load(std::memory_order_relaxed))
+	{
+		if (!g_android_clusters_done.load(std::memory_order_relaxed))
+		{
+			g_android_big_mask.store(detect_android_big_mask(), std::memory_order_relaxed);
+			g_android_clusters_done.store(true, std::memory_order_relaxed);
+		}
+
+		if (const u64 big = g_android_big_mask.load(std::memory_order_relaxed))
+		{
+			switch (group)
+			{
+			case thread_class::ppu:
+			case thread_class::spu:
+			case thread_class::rsx:
+				return big; // heavy work on the big cluster; helpers fall through
+			default:
+				break;
+			}
+		}
+	}
+
 	u64 mask = 0;
 	thread_class affinities[] =
 		{
