@@ -49,7 +49,7 @@ static std::array<serial_ver_t, 28> s_serial_versions;
 	}
 
 SERIALIZATION_VER(global_version, 0, 19) // For stuff not listed here
-SERIALIZATION_VER(ppu, 1, 1, 2 /*PPU sleep order*/, 3 /*PPU FNID and module*/)
+SERIALIZATION_VER(ppu, 1, 1, 2 /*PPU sleep order*/, 3 /*PPU FNID and module*/, 4 /*PPU scalar registers (gpr/fpr/cr/...) - were never serialized on this fork*/)
 SERIALIZATION_VER(spu, 2, 1)
 SERIALIZATION_VER(lv2_sync, 3, 1)
 SERIALIZATION_VER(lv2_vm, 4, 1)

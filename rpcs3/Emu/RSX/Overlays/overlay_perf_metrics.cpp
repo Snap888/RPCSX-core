@@ -257,6 +257,7 @@ namespace rsx
 			{
 				m_update_timer.Start();
 				m_frametime_timer.Start();
+				m_log_timer.Start();
 			}
 
 			update(get_system_time());
@@ -523,6 +524,17 @@ namespace rsx
 						break;
 					}
 					}
+				}
+
+				// Throttled perf summary to the log (~5s) so frame/power behaviour can
+				// be assessed from a shared log without per-frame spam. Only runs while
+				// the overlay is enabled (this overlay isn't updated otherwise), so it
+				// follows the same on/off switch the user already controls.
+				if (m_log_timer.GetElapsedTimeInMilliSec() >= 5000.0)
+				{
+					m_log_timer.Start();
+					rsx_log.notice("Perf: %.1f fps | frametime %.1f ms | CPU %.0f%% | RSX-load %.0f%%",
+						m_fps, m_frametime, m_cpu_usage, m_rsx_load);
 				}
 
 				// 2. Format output string

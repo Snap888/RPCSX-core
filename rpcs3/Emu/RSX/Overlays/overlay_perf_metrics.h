@@ -33,6 +33,7 @@ namespace rsx
 			utils::cpu_stats m_cpu_stats{};
 			Timer m_update_timer{};
 			Timer m_frametime_timer{};
+			Timer m_log_timer{}; // throttles the perf summary written to the log
 			u32 m_update_interval{}; // in ms
 			u32 m_frames{};
 			std::string m_font{};

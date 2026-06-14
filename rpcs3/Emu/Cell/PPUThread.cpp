@@ -2585,9 +2585,19 @@ bool ppu_thread::savable() const
 
 void ppu_thread::serialize_common(utils::serial& ar)
 {
-	[[maybe_unused]] const s32 version = GET_OR_USE_SERIALIZATION_VERSION(ar.is_writing(), ppu);
+	const s32 version = GET_OR_USE_SERIALIZATION_VERSION(ar.is_writing(), ppu);
 
-	// ar(gpr, fpr, cr, fpscr.bits, lr, ctr, vrsave, cia, xer, sat, nj, prio.raw().all);
+	// PPU scalar registers were never serialized on this fork (the upstream line was
+	// commented during the re-vendor because rpcsx renamed the PPUContext fields:
+	// cr->cr_bits, xer->xer_so/ov/ca/cnt, sat bool->v128, fpscr.bits union). Without
+	// this, savestate reload zeroed every GPR/cia, so the game dereferenced a NULL
+	// pointer (reported as base+0 = 0x300000000) and segfaulted. Re-enabled, adapted
+	// to the current field types, gated on version 4 so older savestates still load
+	// (register-less, as before) without desyncing the stream. vr is serialized below.
+	if (version >= 4)
+	{
+		ar(gpr, fpr, cr, fpscr.bits, lr, ctr, vrsave, cia, xer_so, xer_ov, xer_ca, xer_cnt, sat, nj, prio.raw().all);
+	}
 
 	if (cia % 4 || (cia >> 28) >= 0xCu)
 	{

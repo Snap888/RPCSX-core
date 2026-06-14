@@ -1499,7 +1499,14 @@ namespace rsx
 				set_dirty(false);
 			}
 
-			if (context == rsx::texture_upload_context::framebuffer_storage && !Emu.IsStopped())
+			// NOTE: the `&& !Emu.IsStopped()` guard here was a re-vendor slip (absent
+			// upstream). It is the only place a framebuffer section's protect/unprotect
+			// propagates the lock state to its render-target descriptor, so suppressing
+			// it once Emu.IsStopped() (which Emu.Kill(savestate) sets before the RSX
+			// stop-flush) left the section locked but the RT unlocked -> the stop-time
+			// flush hit ensure(is_locked()) in has_flushable_data() and crashed. Match
+			// upstream: keep the RT lock in lockstep in all states.
+			if (context == rsx::texture_upload_context::framebuffer_storage)
 			{
 				// Lock, unlock
 				auto surface = derived()->get_render_target();
