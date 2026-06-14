@@ -1035,7 +1035,8 @@ namespace np
 			}
 		}
 
-		nph_log.notice("basic_event: event:%d, from:%s(%s), size:%d", *event, np::npid_to_string(from->userId), static_cast<char*>(from->name.data), *size);
+		// Privacy: do not log the sender's NPID / name (other users' identities).
+		nph_log.notice("basic_event: event:%d, size:%d", *event, *size);
 
 		return CELL_OK;
 	}
@@ -1096,7 +1097,8 @@ namespace np
 
 	void np_handler::send_message(const message_data& msg_data, const std::set<std::string>& npids)
 	{
-		rpcn_log.notice("Sending message to \"%s\":", fmt::merge(npids, "\",\""));
+		// Privacy: do not log recipients' NPIDs (other users' identities).
+		rpcn_log.notice("Sending message to %d recipient(s)", static_cast<int>(npids.size()));
 		msg_data.print();
 
 		get_rpcn()->send_message(msg_data, npids);
