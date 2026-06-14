@@ -282,6 +282,15 @@ namespace vk
 				preferred_modes = {VK_PRESENT_MODE_IMMEDIATE_KHR, VK_PRESENT_MODE_MAILBOX_KHR, VK_PRESENT_MODE_FIFO_RELAXED_KHR};
 			}
 		}
+		else if (rpcs3::utils::get_power_save_mode())
+		{
+			// Battery-saver still vsyncs (caps the GPU to the display refresh) but
+			// prefers FIFO_RELAXED: a frame that finishes slightly late tears
+			// instead of slipping a whole refresh interval, which smooths the
+			// 30fps-on-60/90/120Hz judder felt as "stutter here and there". Falls
+			// back to plain FIFO if the driver does not support relaxed.
+			preferred_modes = {VK_PRESENT_MODE_FIFO_RELAXED_KHR};
+		}
 
 		bool mode_found = false;
 		for (VkPresentModeKHR preferred_mode : preferred_modes)
