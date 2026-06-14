@@ -41,6 +41,12 @@ namespace rpcs3::utils
 	void set_thermal_frame_cap(float fps);
 	float get_thermal_frame_cap();
 
+	// True when low-power waiting should be used at idle spin sites: either the
+	// battery-saver override is on, or the experimental WFE toggle is on. Lets the
+	// proven WFE/spin-trim wins reach every battery-saver user (the two toggles
+	// were previously decoupled, so battery-saver users never got the WFE parks).
+	bool low_power_wait_enabled();
+
 	void configure_logs(bool force_enable = false);
 
 	u32 check_user(const std::string& user);

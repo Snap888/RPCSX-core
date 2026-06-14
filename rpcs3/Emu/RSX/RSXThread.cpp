@@ -875,9 +875,10 @@ namespace rsx
 	void thread::cpu_wait_on(const u32* watch, u32 keep)
 	{
 #if defined(ARCH_ARM64)
-		// Opt-in low-power path: keep cpu_wait's flush + pause/exit handling, but
-		// park the core on the watched line instead of spinning via yield().
-		if (rx::wfe_enabled() && !external_interrupt_lock
+		// Low-power path: keep cpu_wait's flush + pause/exit handling, but park the
+		// core on the watched line instead of spinning via yield(). Gated on the
+		// coupled toggle so battery-saver users also get this proven park.
+		if (rpcs3::utils::low_power_wait_enabled() && !external_interrupt_lock
 			&& (state & (cpu_flag::dbg_global_pause + cpu_flag::exit)) != cpu_flag::dbg_global_pause)
 		{
 			on_semaphore_acquire_wait();

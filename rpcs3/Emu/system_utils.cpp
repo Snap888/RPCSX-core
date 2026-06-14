@@ -8,6 +8,7 @@
 #include "util/sysinfo.hpp"
 #include "util/File.h"
 #include "util/Thread.h"
+#include "rx/asm.hpp"
 #include "Crypto/unpkg.h"
 #include "Crypto/unself.h"
 #include "Crypto/unedat.h"
@@ -54,6 +55,11 @@ namespace rpcs3::utils
 	float get_thermal_frame_cap()
 	{
 		return g_thermal_frame_cap.load(std::memory_order_relaxed);
+	}
+
+	bool low_power_wait_enabled()
+	{
+		return g_power_save_mode.load(std::memory_order_relaxed) || rx::wfe_enabled();
 	}
 
 	u32 get_max_threads()
