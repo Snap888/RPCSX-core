@@ -5,6 +5,7 @@
 // Return codes
 enum SceNpClansError : u32
 {
+	SCE_NP_CLANS_SUCCESS = CELL_OK,
 	SCE_NP_CLANS_ERROR_ALREADY_INITIALIZED = 0x80022701,
 	SCE_NP_CLANS_ERROR_NOT_INITIALIZED = 0x80022702,
 	SCE_NP_CLANS_ERROR_NOT_SUPPORTED = 0x80022703,
@@ -281,9 +282,6 @@ struct SceNpClansBlacklistEntry
 	SceNpId registeredBy;
 };
 
-// fxm objects
-
-struct sce_np_clans_manager
-{
-	atomic_t<bool> is_initialized = false;
-};
+// sce_np_clans_manager moved to Emu/NP/clans_client.h (upstream re-vendor: the
+// manager now owns the RPCN-backed clans_client). Old client-less definition
+// removed here to avoid redefinition.
