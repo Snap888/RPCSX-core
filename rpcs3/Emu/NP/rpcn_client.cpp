@@ -18,6 +18,11 @@
 
 #include "generated/np2_structs.pb.h"
 
+// For client-side password derivation (PBKDF2-HMAC-SHA3-256). Upstream does this
+// in the Qt settings dialog; the Android fork has no Qt layer, so it lives here.
+#include <wolfssl/wolfcrypt/pwdbased.h>
+#include <wolfssl/wolfcrypt/sha3.h>
+
 #ifdef _WIN32
 #include <winsock2.h>
 #include <WS2tcpip.h>
@@ -382,6 +387,47 @@ namespace rpcn
 		}
 
 		sem_rpcn.release();
+	}
+
+	// Clear a stale transient failure state so a user-initiated retry actually
+	// re-runs connect() (which resets state at its start). Only meaningful when
+	// not currently connected; deliberately NOT done inside disconnect() because
+	// the connect()/login() failure paths call disconnect() and must keep the
+	// failure state for the UI to read.
+	void rpcn_client::clear_failure_state()
+	{
+		std::lock_guard lock(mutex_connected);
+		if (!connected)
+		{
+			state = rpcn_state::failure_no_failure;
+		}
+	}
+
+	// Client-side password derivation, mirroring upstream rpcs3qt
+	// rpcn_settings_dialog.cpp::derive_password. The RPCN server stores
+	// PBKDF2-HMAC-SHA3-256 of the password; the client MUST send this derived
+	// hex, never the raw password (otherwise every login is rejected as invalid).
+	std::string derive_password(std::string_view user_password)
+	{
+		std::string_view salt_str = "No matter where you go, everybody's connected.";
+
+		u8 derived_password_digest[SHA3_256_DIGEST_LENGTH];
+		ensure(!wc_PBKDF2(derived_password_digest, reinterpret_cast<const u8*>(user_password.data()), ::narrow<s32>(user_password.size()), reinterpret_cast<const u8*>(salt_str.data()), ::narrow<s32>(salt_str.size()), 200'000, SHA3_256_DIGEST_LENGTH, WC_SHA3_256));
+
+		std::string derived_password("0000000000000000000000000000000000000000000000000000000000000000");
+		for (u32 i = 0; i < SHA3_256_DIGEST_LENGTH; i++)
+		{
+			constexpr auto pal            = "0123456789ABCDEF";
+			derived_password[i * 2]       = pal[derived_password_digest[i] >> 4];
+			derived_password[(i * 2) + 1] = pal[derived_password_digest[i] & 15];
+		}
+
+		return derived_password;
+	}
+
+	bool validate_token(std::string_view token)
+	{
+		return token.size() == 16 && std::all_of(token.cbegin(), token.cend(), [](const char c) { return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z'); });
 	}
 
 	// RPCN thread
@@ -1274,7 +1320,8 @@ namespace rpcn
 		if (reply.is_error())
 			return error_and_disconnect("Malformed reply to Login command");
 
-		rpcn_log.success("You are now logged in RPCN(%s | %s)!", npid, online_name);
+		// Privacy: do not log the user's NPID / online name (logs get shared for debugging).
+		rpcn_log.success("You are now logged in RPCN!");
 		authentified = true;
 
 		return true;
@@ -1332,7 +1379,8 @@ namespace rpcn
 
 		if (error == rpcn::ErrorType::NoError)
 		{
-			rpcn_log.success("You have successfully created a RPCN account(%s | %s)!", npid, online_name);
+			// Privacy: do not log the user's NPID / online name.
+			rpcn_log.success("You have successfully created a RPCN account!");
 		}
 
 		return error;

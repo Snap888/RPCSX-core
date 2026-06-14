@@ -3301,7 +3301,9 @@ extern "C" std::string _rpcsx_rpcnGetConfig() {
   out += "\",\"npid\":\"";
   out += rpcn_json_escape(g_cfg_rpcn.get_npid());
   out += "\",\"password\":\"";
-  out += rpcn_json_escape(g_cfg_rpcn.get_password());
+  // Intentionally empty: the stored password is a derived hash (PBKDF2-SHA3),
+  // not the raw password. Returning it would let the UI re-submit and re-derive
+  // it (double hash -> login fails), and needlessly echoes the secret hash back.
   out += "\",\"token\":\"";
   out += rpcn_json_escape(g_cfg_rpcn.get_token());
   out += "\"}";
@@ -3312,7 +3314,12 @@ extern "C" void _rpcsx_rpcnSetCredentials(std::string_view npid,
                                           std::string_view password,
                                           std::string_view token) {
   g_cfg_rpcn.set_npid(npid);
-  g_cfg_rpcn.set_password(password);
+  // Derive the password client-side (PBKDF2-SHA3) before storing/sending; the
+  // RPCN server only accepts the derived form. An empty password means the user
+  // did not retype it, so keep the existing stored (already-derived) value.
+  if (!password.empty()) {
+    g_cfg_rpcn.set_password(rpcn::derive_password(password));
+  }
   g_cfg_rpcn.set_token(token);
   g_cfg_rpcn.save();
 }
@@ -3384,6 +3391,11 @@ extern "C" bool _rpcsx_rpcnRemoveHost(std::string_view host) {
 extern "C" void _rpcsx_rpcnSetActiveHost(std::string_view host) {
   g_cfg_rpcn.set_host(host);
   g_cfg_rpcn.save();
+  // Drop any live connection so the next test/sign-in reconnects to the NEW
+  // host instead of silently reusing the cached connection to the old one.
+  if (auto client = rpcn::rpcn_client::get_instance(0)) {
+    client->server_infos_updated();
+  }
 }
 
 extern "C" std::string _rpcsx_rpcnGetActiveHost() {
@@ -3406,21 +3418,24 @@ extern "C" std::string _rpcsx_rpcnCreateAccount(std::string_view npid,
   if (!client) {
     return "Failed to obtain RPCN client instance.";
   }
+  client->clear_failure_state(); // clear any stale failure so this attempt reconnects
 
   if (auto state = client->wait_for_connection();
       state != rpcn::rpcn_state::failure_no_failure) {
     return rpcn::rpcn_state_to_string(state);
   }
 
+  // Derive once; create_user and the stored credential must use the same value.
+  const std::string derived = rpcn::derive_password(password);
   const auto error =
-      client->create_user(npid, password, online_name, /*avatar_url*/ "", email);
+      client->create_user(npid, derived, online_name, /*avatar_url*/ "", email);
   if (error != rpcn::ErrorType::NoError) {
     return rpcn_error_to_string(error);
   }
 
-  // Persist credentials so the user can then verify the emailed token.
+  // Persist credentials (derived password) so the user can then verify the token.
   g_cfg_rpcn.set_npid(npid);
-  g_cfg_rpcn.set_password(password);
+  g_cfg_rpcn.set_password(derived);
   g_cfg_rpcn.save();
   return "";
 }
@@ -3435,6 +3450,7 @@ extern "C" std::string _rpcsx_rpcnResendToken() {
   if (!client) {
     return "Failed to obtain RPCN client instance.";
   }
+  client->clear_failure_state(); // clear any stale failure so this attempt reconnects
 
   if (auto state = client->wait_for_connection();
       state != rpcn::rpcn_state::failure_no_failure) {
@@ -3455,6 +3471,7 @@ extern "C" std::string _rpcsx_rpcnTestConnection() {
   if (!client) {
     return "Failed to obtain RPCN client instance.";
   }
+  client->clear_failure_state(); // clear any stale failure so this attempt reconnects
 
   if (auto state = client->wait_for_connection();
       state != rpcn::rpcn_state::failure_no_failure) {

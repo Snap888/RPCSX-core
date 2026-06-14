@@ -214,6 +214,10 @@ namespace rpcn
 	std::string rpcn_state_to_string(rpcn::rpcn_state state);
 	void print_error(rpcn::CommandType command, rpcn::ErrorType error);
 
+	// Client-side credential helpers (the Android fork has no Qt settings dialog).
+	std::string derive_password(std::string_view user_password);
+	bool validate_token(std::string_view token);
+
 	class rpcn_client
 	{
 	private:
@@ -326,6 +330,9 @@ namespace rpcn
 		rpcn_state get_rpcn_state() const;
 
 		void server_infos_updated();
+
+		// Clear a stale transient failure state so a user-initiated retry reconnects.
+		void clear_failure_state();
 
 		// Synchronous requests
 		bool get_server_list(u32 req_id, const SceNpCommunicationId& communication_id, std::vector<u16>& server_list);
