@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Emu/Memory/vm_ptr.h"
-#include "util/asm.hpp"
+#include "rx/asm.hpp"
 
 namespace np
 {
@@ -9,7 +9,7 @@ namespace np
 	{
 	public:
 		event_data(u32 vm_addr, u32 initial_size, u32 max_size)
-			: m_max_size(max_size), m_cur_size(utils::align(initial_size, 4))
+			: m_max_size(max_size), m_cur_size(rx::align(initial_size, 4))
 		{
 			m_data_ptr.set(vm_addr);
 		}
@@ -50,7 +50,7 @@ namespace np
 		template <typename T>
 		T* allocate(u32 size, vm::bptr<T>& dest)
 		{
-			const u32 to_alloc = utils::align(size, 4);
+			const u32 to_alloc = rx::align(size, 4);
 			ensure((m_cur_size + to_alloc) <= m_max_size, "event_data::allocate: size would overflow the allocated buffer!");
 
 			u8* dest_ptr = reinterpret_cast<u8*>(&dest);

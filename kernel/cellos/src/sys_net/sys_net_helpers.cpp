@@ -2,9 +2,14 @@
 
 #include "Emu/Cell/PPUThread.h"
 #include "Emu/IdManager.h"
+#include "Emu/system_config.h"
 #include "sys_net/lv2_socket.h"
 #include "sys_net/network_context.h"
 #include "sys_net/sys_net_helpers.h"
+
+#ifndef _WIN32
+#include <arpa/inet.h>
+#endif
 
 LOG_CHANNEL(sys_net);
 
@@ -177,6 +182,25 @@ bool is_ip_public_address(const ::sockaddr_in &addr) {
   }
 
   return true;
+}
+
+be_t<u32> resolve_binding_ip() {
+  in_addr conv{};
+  const std::string cfg_bind_addr = g_cfg.net.bind_address.to_string();
+
+  if (cfg_bind_addr == "0.0.0.0" || cfg_bind_addr == "") {
+    return 0;
+  }
+
+  if (!inet_pton(AF_INET, cfg_bind_addr.c_str(), &conv)) {
+    // Do not set to disconnected on invalid IP just error and continue using
+    // default (0.0.0.0)
+    sys_net.error("Provided IP(%s) address for bind is invalid!",
+                  g_cfg.net.bind_address.to_string());
+    return 0;
+  }
+
+  return conv.s_addr;
 }
 
 u32 network_clear_queue(ppu_thread &ppu) {

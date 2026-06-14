@@ -614,7 +614,9 @@ namespace np
 	{
 		if (g_cfg.net.derive_mac_from_psid)
 		{
-			const u128 psid = g_cfg.sys.console_psid;
+			const u64 psid_low = g_cfg.sys.console_psid_low;
+			const u64 psid_high = g_cfg.sys.console_psid_high;
+			u128 psid = u128{psid_high} << 64 | u128{psid_low};
 			memcpy(ether_address.data(), &psid, 6);
 			ether_address[0] &= 0xFE;
 			ether_address[0] |= 0x02;
