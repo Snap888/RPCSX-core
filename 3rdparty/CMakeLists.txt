@@ -125,15 +125,15 @@ add_library(zstd::libzstd_static ALIAS libzstd_static)
 # 7zip sdk
 add_subdirectory(7zip EXCLUDE_FROM_ALL)
 
+# Protobuf (RPCN). Cross-compiled for Android arm64; pulls abseil via FetchContent.
+add_subdirectory(protobuf EXCLUDE_FROM_ALL)
+add_library(3rdparty::protobuf ALIAS 3rdparty_protobuf)
+
 add_library(3rdparty_flatbuffers INTERFACE)
 if (USE_SYSTEM_FLATBUFFERS)
 	pkg_check_modules(FLATBUFFERS REQUIRED IMPORTED_TARGET flatbuffers>=2.0.0)
 	target_link_libraries(3rdparty_flatbuffers INTERFACE PkgConfig::FLATBUFFERS)
-	set(FBS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../rpcs3/Emu/NP/generated/")
-	execute_process(COMMAND flatc --cpp -o "${FBS_DIR}" "${FBS_DIR}/np2_structs.fbs" RESULT_VARIABLE FBS_CMD_ERROR)
-	if(FBS_CMD_ERROR AND NOT FBS_CMD_ERROR EQUAL 0)
-		message(FATAL_ERROR "flatc failed to regenerate flatbuffers headers.")
-	endif()
+	# NP migrated from flatbuffers to protobuf; the np2_structs.fbs flatc step is gone.
 else()
 	target_include_directories(3rdparty_flatbuffers INTERFACE flatbuffers/include)
 endif()
