@@ -534,7 +534,7 @@ namespace rsx
 				{
 					m_log_timer.Start();
 					rsx_log.notice("Perf: %.1f fps | frametime %.1f ms | CPU %.0f%% | RSX-load %.0f%%",
-						m_fps, m_frametime, m_cpu_usage, m_rsx_load);
+						m_fps, (m_frametime > 0.f ? m_frametime : (m_fps > 0.f ? 1000.f / m_fps : 0.f)), m_cpu_usage, m_rsx_load);
 				}
 
 				// 2. Format output string
