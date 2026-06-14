@@ -3204,21 +3204,25 @@ extern "C" void _rpcsx_setMaxCompileThreads(int count) {
 // Android battery-saver toggle (see rpcs3::utils::get_power_save_mode).
 extern "C" void _rpcsx_setPowerSaveMode(int on) {
   rpcs3::utils::set_power_save_mode(on != 0);
+  rpcsx_android.notice("Power: battery-saver mode %s", on ? "ON" : "off");
 }
 
 // Android thermal throttle: frame-rate cap (fps) when the SoC is hot; 0 = none.
 extern "C" void _rpcsx_setThermalFrameCap(float fps) {
   rpcs3::utils::set_thermal_frame_cap(fps);
+  rpcsx_android.notice("Power: thermal frame cap %.0f fps", fps);
 }
 
 // Android experimental: bias PPU/SPU/RSX onto the big CPU cluster.
 extern "C" void _rpcsx_setCpuAffinityMode(int on) {
   thread_ctrl::set_android_affinity(on != 0);
+  rpcsx_android.notice("Power: big-cluster CPU affinity %s", on ? "ON" : "off");
 }
 
 // Android experimental: low-power WFE waiting (RSX semaphore park).
 extern "C" void _rpcsx_setWfeMode(int on) {
   rx::set_wfe_mode(on != 0);
+  rpcsx_android.notice("Power: low-power WFE waiting %s", on ? "ON" : "off");
 }
 
 extern "C" std::string _rpcsx_getVersion() {
