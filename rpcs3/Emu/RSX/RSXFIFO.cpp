@@ -1,6 +1,7 @@
 #include "stdafx.h"
 
 #include "Emu/System.h"
+#include "Emu/system_utils.hpp"
 #include "RSXFIFO.h"
 #include "RSXThread.h"
 #include "Capture/rsx_capture.h"
@@ -39,6 +40,25 @@ namespace rsx
 		void FIFO_control::sync_get() const
 		{
 			m_ctrl->get.release(m_internal_get);
+		}
+
+		void FIFO_control::idle_wait() const
+		{
+#if defined(ARCH_ARM64)
+			if (rpcs3::utils::low_power_wait_enabled())
+			{
+				// Park on the FIFO 'put' register (raw bytes). The CPU writes put to
+				// submit new commands, which clears the WFE monitor and wakes us
+				// immediately; emulation stop SEVs parked threads. wfe_park bails at
+				// once if put already changed (no lost wakeup), and the run_FIFO loop
+				// re-reads put + checks stop on every wake, so the worst case is a
+				// brief re-poll rather than a stall.
+				const u32* put_word = reinterpret_cast<const u32*>(&m_ctrl->put);
+				rx::wfe_park(put_word, *put_word);
+				return;
+			}
+#endif
+			std::this_thread::yield();
 		}
 
 		void FIFO_control::restore_state(u32 cmd, u32 count)
@@ -671,7 +691,7 @@ namespace rsx
 				}
 				else
 				{
-					std::this_thread::yield();
+					fifo_ctrl->idle_wait();
 				}
 
 				return;
