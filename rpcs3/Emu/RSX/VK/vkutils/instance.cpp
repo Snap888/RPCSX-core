@@ -299,6 +299,18 @@ namespace vk
 		WSI_config surface_config{
 			.supports_automatic_wm_reports = true,
 		};
+
+		// The VkInstance persists across a savestate reload while VKGSRender (and
+		// its swapchain) is destroyed and recreated. A leftover surface still owns
+		// the Android ANativeWindow, so creating a new one fails with
+		// VK_ERROR_NATIVE_WINDOW_IN_USE_KHR. Destroy the previous surface first
+		// (its swapchain is already gone with the old renderer).
+		if (m_surface != VK_NULL_HANDLE)
+		{
+			VK_GET_SYMBOL(vkDestroySurfaceKHR)(m_instance, m_surface, nullptr);
+			m_surface = VK_NULL_HANDLE;
+		}
+
 		m_surface = make_WSI_surface(m_instance, window_handle, &surface_config);
 
 		u32 device_queues = dev.get_queue_count();
