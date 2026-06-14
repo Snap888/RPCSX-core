@@ -15,6 +15,10 @@ namespace rsx
 			texture2D = 3
 		};
 
+		// Defined in Overlays/overlay_controls.h; forward-declared so fragment_options
+		// can take it without pulling the whole overlay control header in here.
+		enum class sdf_function : u8;
+
 		class fragment_options
 		{
 			u32 value = 0;
@@ -23,7 +27,8 @@ namespace rsx
 			{
 				fragment_clip_bit = 0,
 				pulse_glow_bit = 1,
-				sampling_mode_bit = 2
+				sampling_mode_bit = 2,
+				sdf_func_offset_bit = 4
 			};
 
 		public:
@@ -48,6 +53,13 @@ namespace rsx
 				{
 					value |= (1 << e_offsets::fragment_clip_bit);
 				}
+				return *this;
+			}
+
+			fragment_options& set_sdf(sdf_function func)
+			{
+				value &= ~(0x3u << e_offsets::sdf_func_offset_bit);
+				value |= (static_cast<u32>(func) << e_offsets::sdf_func_offset_bit);
 				return *this;
 			}
 
