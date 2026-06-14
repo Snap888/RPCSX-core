@@ -26,7 +26,9 @@ namespace rsx
 			m_message_box = std::make_shared<home_menu_message_box>(x, y, width, height);
 			m_message_box->visible = false;
 
-			m_sidebar = std::make_unique<list_view>(410, overlay::virtual_height, false);
+			// Start narrow; each entry grows the panel via packed_width to fit the
+			// widest item, so the sidebar is only as wide as it needs to be.
+			m_sidebar = std::make_unique<list_view>(260, overlay::virtual_height, false);
 			m_sidebar->set_pos(0, 0);
 			m_sidebar->hide_prompt_buttons();
 			m_sidebar->back_color = color4f(0.05f, 0.05f, 0.05f, 0.95f);
@@ -180,10 +182,14 @@ namespace rsx
 			// Shrink the black sidebar panel to its content and center it vertically,
 			// so it doesn't take the whole screen height when only a few entries are
 			// present (keeps more of the game visible behind the menu).
-			const u16 bar_height = std::min<u16>(combined_height, overlay::virtual_height);
-			m_sidebar->set_size(m_sidebar->w, bar_height);
-			m_sidebar->set_pos(m_sidebar->x, (overlay::virtual_height - bar_height) / 2);
-			m_sidebar->advance_pos = 0;
+			// Keep the full-height panel and center the entries vertically (do NOT
+			// clip top/bottom). The panel WIDTH fits the content (small starting
+			// width + per-entry packed-width growth), so the bar is only as wide as
+			// the widest item, not the whole left third.
+			if (combined_height < overlay::virtual_height)
+			{
+				m_sidebar->advance_pos = (overlay::virtual_height - combined_height) / 2;
+			}
 
 			for (auto& entry : sidebar_items)
 			{
