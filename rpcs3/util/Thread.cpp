@@ -2785,7 +2785,16 @@ bool thread_base::join(bool dtor) const
 	}
 
 	// Hacked for too sleepy threads (1ms) TODO: make sure it's unneeded and remove
-	const auto timeout = dtor && Emu.IsStopped() ? atomic_wait_timeout{1'000'000} : atomic_wait_timeout::inf;
+	auto timeout = dtor && Emu.IsStopped() ? atomic_wait_timeout{1'000'000} : atomic_wait_timeout::inf;
+
+	// With opt-in WFE low-power waits, the joined thread may be parked on a watched
+	// cacheline (rx::wfe_park) rather than this sync word, so it can't see a stop on
+	// its own. Cap the wait so we periodically wake to SEV it (below); otherwise the
+	// join would hang waiting for a thread that never observes its stop flag.
+	if (rx::wfe_enabled() && timeout == atomic_wait_timeout::inf)
+	{
+		timeout = atomic_wait_timeout{1'000'000};
+	}
 
 	auto stamp0 = rx::get_tsc();
 
@@ -2796,6 +2805,13 @@ bool thread_base::join(bool dtor) const
 		if (m_sync & 2)
 		{
 			break;
+		}
+
+		// Wake any thread parked in a low-power WFE wait so it re-checks its stop
+		// flag and can finish; harmless no-op when WFE is disabled or not on ARM.
+		if (rx::wfe_enabled())
+		{
+			rx::send_event();
 		}
 
 		if (i >= 16 && !(i & (i - 1)) && timeout != atomic_wait_timeout::inf)

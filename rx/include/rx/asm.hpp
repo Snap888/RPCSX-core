@@ -334,9 +334,16 @@ inline void wfe_park(const u32* addr, u32 keep)
     return;
   __asm__ volatile("wfe" ::: "memory");
 }
+
+// Broadcast an event to every core, waking any thread parked in wfe_park. WFE
+// sleeps on a watched cacheline, not on a thread's stop/state word, so a parked
+// thread won't observe a stop request on its own; the stop path SEVs so the
+// thread wakes, re-checks its loop condition (incl. test_stopped) and can exit.
+inline void send_event() { __asm__ volatile("sev" ::: "memory"); }
 #else
 inline void set_wfe_mode(bool /*on*/) {}
 inline bool wfe_enabled() { return false; }
+inline void send_event() {}
 #endif
 
 // Align to power of 2
