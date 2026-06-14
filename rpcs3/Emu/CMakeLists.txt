@@ -36,7 +36,7 @@ target_link_libraries(rpcs3_emu
     PRIVATE
         3rdparty::zlib 3rdparty::yaml-cpp 3rdparty::zstd
     PUBLIC
-        3rdparty::libevdev 3rdparty::flatbuffers)
+        3rdparty::libevdev 3rdparty::protobuf)
 
 
 find_package(Threads REQUIRED)
@@ -197,7 +197,7 @@ target_link_libraries(rpcs3_emu PRIVATE
 
 # Np
 target_sources(rpcs3_emu PRIVATE
-    NP/fb_helpers.cpp
+    NP/pb_helpers.cpp
     NP/np_cache.cpp
     NP/np_gui_cache.cpp
     NP/np_contexts.cpp
@@ -215,6 +215,7 @@ target_sources(rpcs3_emu PRIVATE
     NP/upnp_config.cpp
     NP/upnp_handler.cpp
     NP/ip_address.cpp
+    NP/generated/np2_structs.pb.cc
 )
 
 # Memory
@@ -399,6 +400,7 @@ target_link_libraries(rpcs3_emu
         3rdparty::opengl 3rdparty::stblib
         3rdparty::vulkan 3rdparty::glew
         3rdparty::libusb 3rdparty::wolfssl
+        3rdparty::libcurl
         Vulkan::Headers
         rpcsx::fw::ps3::api
         rpcsx::cpu::cell::ppu

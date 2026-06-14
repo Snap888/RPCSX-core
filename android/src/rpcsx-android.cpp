@@ -15,6 +15,9 @@
 #include "Emu/Io/Null/null_camera_handler.h"
 #include "Emu/Io/Null/null_music_handler.h"
 #include "Emu/Io/pad_config_types.h"
+#include "Emu/NP/rpcn_client.h"
+#include "Emu/NP/rpcn_config.h"
+#include "Emu/NP/rpcn_types.h"
 #include "Emu/RSX/Null/NullGSRender.h"
 #include "Emu/RSX/Overlays/overlay_manager.h"
 #include "Emu/RSX/Overlays/overlay_save_dialog.h"
@@ -399,12 +402,15 @@ static std::pair<std::string, std::u32string> g_strings[] = {
     MAKE_STRING(CELL_NP_SENDMESSAGE_DIALOG_TITLE, "Select Message To Send"),
     MAKE_STRING(CELL_NP_SENDMESSAGE_DIALOG_TITLE_INVITE, "Send Invite"),
     MAKE_STRING(CELL_NP_SENDMESSAGE_DIALOG_TITLE_ADD_FRIEND, "Add Friend"),
+    MAKE_STRING(CELL_NP_MESSAGE_INVITE_RECEIVED, "Received an invite from %0"),
+    MAKE_STRING(CELL_NP_MESSAGE_OTHER_RECEIVED, "Received a message from %0"),
     MAKE_STRING(RECORDING_ABORTED, "Recording aborted!"),
     MAKE_STRING(RPCN_NO_ERROR, "RPCN: No Error"),
     MAKE_STRING(RPCN_ERROR_INVALID_INPUT,
                 "RPCN: Invalid Input (Wrong Host/Port)"),
     MAKE_STRING(RPCN_ERROR_WOLFSSL, "RPCN Connection Error: WolfSSL Error"),
     MAKE_STRING(RPCN_ERROR_RESOLVE, "RPCN Connection Error: Resolve Error"),
+    MAKE_STRING(RPCN_ERROR_BINDING, "RPCN Connection Error: Failed to bind to given binding IP"),
     MAKE_STRING(RPCN_ERROR_CONNECT, "RPCN Connection Error"),
     MAKE_STRING(RPCN_ERROR_LOGIN_ERROR,
                 "RPCN Login Error: Identification Error"),
@@ -3229,6 +3235,255 @@ extern "C" void _rpcsx_setWfeMode(int on) {
 
 extern "C" std::string _rpcsx_getVersion() {
   return rx::getVersion().toString();
+}
+
+// ---------------------------------------------------------------------------
+// RPCN JNI bridge. The app drives the PSN/RPCN account + host configuration
+// through these. Network-blocking calls (create account, resend token, test
+// connection) are invoked off the UI thread by the app side.
+// ---------------------------------------------------------------------------
+
+namespace {
+// Minimal JSON string escaper for the config getters. npid/host/token rarely
+// contain quotes or backslashes, but escape them to keep the JSON well-formed.
+static std::string rpcn_json_escape(std::string_view in) {
+  std::string out;
+  out.reserve(in.size() + 2);
+  for (char c : in) {
+    switch (c) {
+    case '\\': out += "\\\\"; break;
+    case '"': out += "\\\""; break;
+    case '\n': out += "\\n"; break;
+    case '\r': out += "\\r"; break;
+    case '\t': out += "\\t"; break;
+    default: out += c; break;
+    }
+  }
+  return out;
+}
+
+// Human-readable text for an RPCN account/login ErrorType. Mirrors the upstream
+// error_to_explanation table (rpcn_client.cpp), which is not exported.
+static std::string rpcn_error_to_string(rpcn::ErrorType error) {
+  switch (error) {
+  case rpcn::ErrorType::NoError: return "";
+  case rpcn::ErrorType::Malformed: return "Sent packet was malformed.";
+  case rpcn::ErrorType::Invalid: return "Sent command was invalid.";
+  case rpcn::ErrorType::InvalidInput: return "Sent data was invalid.";
+  case rpcn::ErrorType::TooSoon:
+    return "Request happened too soon, please wait before retrying.";
+  case rpcn::ErrorType::LoginError: return "Unknown login error.";
+  case rpcn::ErrorType::LoginAlreadyLoggedIn: return "User is already logged in.";
+  case rpcn::ErrorType::LoginInvalidUsername: return "Login error: invalid username.";
+  case rpcn::ErrorType::LoginInvalidPassword: return "Login error: invalid password.";
+  case rpcn::ErrorType::LoginInvalidToken: return "Login error: invalid token.";
+  case rpcn::ErrorType::CreationError: return "Error creating an account.";
+  case rpcn::ErrorType::CreationExistingUsername:
+    return "An account with that username already exists.";
+  case rpcn::ErrorType::CreationBannedEmailProvider:
+    return "This email provider is banned.";
+  case rpcn::ErrorType::CreationExistingEmail:
+    return "An account with that email already exists.";
+  case rpcn::ErrorType::DbFail: return "A database query failed on the server.";
+  case rpcn::ErrorType::EmailFail: return "An email action failed on the server.";
+  case rpcn::ErrorType::NotFound: return "Requested object was not found.";
+  case rpcn::ErrorType::Unauthorized: return "Unauthorized operation.";
+  default: return "RPCN error.";
+  }
+}
+} // namespace
+
+// Return current RPCN config as JSON {host, npid, password, token}.
+extern "C" std::string _rpcsx_rpcnGetConfig() {
+  g_cfg_rpcn.load();
+  std::string out = "{\"host\":\"";
+  out += rpcn_json_escape(g_cfg_rpcn.get_host());
+  out += "\",\"npid\":\"";
+  out += rpcn_json_escape(g_cfg_rpcn.get_npid());
+  out += "\",\"password\":\"";
+  out += rpcn_json_escape(g_cfg_rpcn.get_password());
+  out += "\",\"token\":\"";
+  out += rpcn_json_escape(g_cfg_rpcn.get_token());
+  out += "\"}";
+  return out;
+}
+
+extern "C" void _rpcsx_rpcnSetCredentials(std::string_view npid,
+                                          std::string_view password,
+                                          std::string_view token) {
+  g_cfg_rpcn.set_npid(npid);
+  g_cfg_rpcn.set_password(password);
+  g_cfg_rpcn.set_token(token);
+  g_cfg_rpcn.save();
+}
+
+// Return host list as JSON [{description, host}].
+extern "C" std::string _rpcsx_rpcnGetHosts() {
+  g_cfg_rpcn.load();
+  const auto hosts = g_cfg_rpcn.get_hosts();
+  std::string out = "[";
+  bool first = true;
+  for (const auto &[description, host] : hosts) {
+    if (!first) {
+      out += ",";
+    }
+    first = false;
+    out += "{\"description\":\"";
+    out += rpcn_json_escape(description);
+    out += "\",\"host\":\"";
+    out += rpcn_json_escape(host);
+    out += "\"}";
+  }
+  out += "]";
+  return out;
+}
+
+extern "C" bool _rpcsx_rpcnAddHost(std::string_view description,
+                                   std::string_view host) {
+  const bool added = g_cfg_rpcn.add_host(description, host);
+  if (added) {
+    g_cfg_rpcn.save();
+  }
+  return added;
+}
+
+extern "C" bool _rpcsx_rpcnRemoveHost(std::string_view host) {
+  auto hosts = g_cfg_rpcn.get_hosts();
+  // Never remove the last/only entry: RPCN always needs a server to point at.
+  if (hosts.size() <= 1) {
+    return false;
+  }
+
+  std::vector<std::pair<std::string, std::string>> filtered;
+  filtered.reserve(hosts.size());
+  for (auto &entry : hosts) {
+    if (entry.second != host) {
+      filtered.push_back(std::move(entry));
+    }
+  }
+
+  if (filtered.size() == hosts.size()) {
+    return false; // nothing matched
+  }
+
+  // set_hosts is private; del_host removes by (description, host) pair.
+  bool removed = false;
+  for (const auto &[description, h] : hosts) {
+    if (h == host) {
+      if (g_cfg_rpcn.del_host(description, h)) {
+        removed = true;
+      }
+    }
+  }
+  if (removed) {
+    g_cfg_rpcn.save();
+  }
+  return removed;
+}
+
+extern "C" void _rpcsx_rpcnSetActiveHost(std::string_view host) {
+  g_cfg_rpcn.set_host(host);
+  g_cfg_rpcn.save();
+}
+
+extern "C" std::string _rpcsx_rpcnGetActiveHost() {
+  g_cfg_rpcn.load();
+  return g_cfg_rpcn.get_host();
+}
+
+// Create an RPCN account. Returns "" on success, else a human error string.
+// The country arg is collected by the UI for future use; create_user has no
+// country parameter so it is intentionally not forwarded.
+extern "C" std::string _rpcsx_rpcnCreateAccount(std::string_view npid,
+                                                std::string_view password,
+                                                std::string_view online_name,
+                                                std::string_view email,
+                                                std::string_view country) {
+  (void)country;
+  g_cfg_rpcn.load();
+
+  auto client = rpcn::rpcn_client::get_instance(0);
+  if (!client) {
+    return "Failed to obtain RPCN client instance.";
+  }
+
+  if (auto state = client->wait_for_connection();
+      state != rpcn::rpcn_state::failure_no_failure) {
+    return rpcn::rpcn_state_to_string(state);
+  }
+
+  const auto error =
+      client->create_user(npid, password, online_name, /*avatar_url*/ "", email);
+  if (error != rpcn::ErrorType::NoError) {
+    return rpcn_error_to_string(error);
+  }
+
+  // Persist credentials so the user can then verify the emailed token.
+  g_cfg_rpcn.set_npid(npid);
+  g_cfg_rpcn.set_password(password);
+  g_cfg_rpcn.save();
+  return "";
+}
+
+// Resend the account verification token. Returns "" on success, else an error.
+extern "C" std::string _rpcsx_rpcnResendToken() {
+  g_cfg_rpcn.load();
+  const std::string npid = g_cfg_rpcn.get_npid();
+  const std::string password = g_cfg_rpcn.get_password();
+
+  auto client = rpcn::rpcn_client::get_instance(0);
+  if (!client) {
+    return "Failed to obtain RPCN client instance.";
+  }
+
+  if (auto state = client->wait_for_connection();
+      state != rpcn::rpcn_state::failure_no_failure) {
+    return rpcn::rpcn_state_to_string(state);
+  }
+
+  const auto error = client->resend_token(npid, password);
+  if (error != rpcn::ErrorType::NoError) {
+    return rpcn_error_to_string(error);
+  }
+  return "";
+}
+
+// Test the RPCN connection + authentication. Returns "" if both succeed,
+// else the human string for the failing state.
+extern "C" std::string _rpcsx_rpcnTestConnection() {
+  auto client = rpcn::rpcn_client::get_instance(0);
+  if (!client) {
+    return "Failed to obtain RPCN client instance.";
+  }
+
+  if (auto state = client->wait_for_connection();
+      state != rpcn::rpcn_state::failure_no_failure) {
+    return rpcn::rpcn_state_to_string(state);
+  }
+
+  if (auto state = client->wait_for_authentified();
+      state != rpcn::rpcn_state::failure_no_failure) {
+    return rpcn::rpcn_state_to_string(state);
+  }
+
+  return "";
+}
+
+// Enable/disable RPCN. Enable sets PSN=RPCN and Internet=enabled; disable sets
+// PSN=disabled. Persisted via the same path the settings JNI uses.
+extern "C" void _rpcsx_rpcnSetEnabled(int enabled) {
+  if (enabled) {
+    g_cfg.net.psn_status.set(np_psn_status::psn_rpcn);
+    g_cfg.net.net_active.set(np_internet_status::enabled);
+  } else {
+    g_cfg.net.psn_status.set(np_psn_status::disabled);
+  }
+  Emulator::SaveSettings(g_cfg.to_string(), "");
+  rpcsx_android.notice("RPCN: %s", enabled ? "enabled" : "disabled");
+}
+
+extern "C" bool _rpcsx_rpcnIsEnabled() {
+  return g_cfg.net.psn_status.get() == np_psn_status::psn_rpcn;
 }
 
 extern "C" void *_rpcsx_setCustomDriver(void *driverHandle) {

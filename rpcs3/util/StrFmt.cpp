@@ -819,6 +819,50 @@ std::vector<std::string> fmt::split(std::string_view source, std::initializer_li
 	return result;
 }
 
+std::vector<std::string_view> fmt::split_sv(std::string_view source, std::initializer_list<std::string_view> separators, bool is_skip_empty)
+{
+	std::vector<std::string_view> result;
+
+	for (usz index = 0; index < source.size();)
+	{
+		usz pos = -1;
+		usz sep_size = 0;
+
+		for (auto& separator : separators)
+		{
+			if (usz pos0 = source.find(separator, index); pos0 < pos)
+			{
+				pos = pos0;
+				sep_size = separator.size();
+			}
+		}
+
+		if (!sep_size)
+		{
+			result.emplace_back(&source[index], source.size() - index);
+			return result;
+		}
+
+		std::string_view piece = {&source[index], pos - index};
+
+		index = pos + sep_size;
+
+		if (piece.empty() && is_skip_empty)
+		{
+			continue;
+		}
+
+		result.emplace_back(std::move(piece));
+	}
+
+	if (result.empty() && !is_skip_empty)
+	{
+		result.emplace_back();
+	}
+
+	return result;
+}
+
 std::string fmt::trim(const std::string& source, std::string_view values)
 {
 	const usz begin = source.find_first_not_of(values);

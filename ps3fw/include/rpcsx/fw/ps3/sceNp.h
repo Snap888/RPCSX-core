@@ -33,6 +33,7 @@ using SceNpBasicMessageRecvAction = u32;
 using SceNpClanId = u32;
 using SceNpClansMessageId = u32;
 using SceNpClansMemberStatus = s32;
+using SceNpClansMemberRole = u32;
 
 using SceNpCustomMenuIndexMask = u32;
 using SceNpCustomMenuSelectedType = u32;
