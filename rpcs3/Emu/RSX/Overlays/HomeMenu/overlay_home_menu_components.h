@@ -14,9 +14,9 @@ namespace rsx
 {
 	namespace overlays
 	{
-		static constexpr u16 menu_entry_height = 52;
+		static constexpr u16 menu_entry_height = 46;
 		static constexpr u16 menu_entry_margin = 30;
-		static constexpr u16 menu_checkbox_size = 30;
+		static constexpr u16 menu_checkbox_size = 26;
 		static constexpr u16 element_height = 25;
 
 		enum class page_navigation
