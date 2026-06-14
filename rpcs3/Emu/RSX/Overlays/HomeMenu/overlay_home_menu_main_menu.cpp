@@ -26,7 +26,7 @@ namespace rsx
 			m_message_box = std::make_shared<home_menu_message_box>(x, y, width, height);
 			m_message_box->visible = false;
 
-			m_sidebar = std::make_unique<list_view>(350, overlay::virtual_height, false);
+			m_sidebar = std::make_unique<list_view>(440, overlay::virtual_height, false);
 			m_sidebar->set_pos(0, 0);
 			m_sidebar->hide_prompt_buttons();
 			m_sidebar->back_color = color4f(0.05f, 0.05f, 0.05f, 0.95f);
@@ -191,13 +191,13 @@ namespace rsx
 		void home_menu_main_menu::add_sidebar_entry(home_menu::fa_icon icon, std::string_view title)
 		{
 			auto label_widget = std::make_unique<label>(title.data());
-			label_widget->set_size(m_sidebar->w, 60);
-			label_widget->set_font("Arial", 16);
+			label_widget->set_size(m_sidebar->w, 74);
+			label_widget->set_font("Arial", 23);
 			label_widget->back_color.a = 0.f;
 			label_widget->set_margin(8, 0);
-			label_widget->set_padding(16, 4, 16, 4);
+			label_widget->set_padding(16, 4, 18, 18);
 			label_widget->auto_resize();
-			label_widget->set_size(label_widget->w, 60);
+			label_widget->set_size(label_widget->w, 74);
 
 			if (icon == home_menu::fa_icon::none)
 			{
@@ -213,9 +213,9 @@ namespace rsx
 			auto icon_info = ensure(home_menu::get_icon(icon));
 			auto icon_view = std::make_unique<image_view>();
 			icon_view->set_raw_image(icon_info);
-			icon_view->set_size(42, 60);
+			icon_view->set_size(48, 74);
 			icon_view->set_margin(8, 0);
-			icon_view->set_padding(18, 0, 18, 18);
+			icon_view->set_padding(20, 4, 22, 22);
 
 			const u16 packed_width = icon_view->padding_left + icon_view->w + label_widget->w + 18; // rpad
 			if (packed_width > m_sidebar->w)
