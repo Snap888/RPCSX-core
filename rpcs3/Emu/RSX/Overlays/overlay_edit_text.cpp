@@ -199,7 +199,8 @@ namespace rsx
 			if (!is_compiled())
 			{
 				auto renderer = get_font();
-				const auto [caret_x, caret_y] = renderer->get_char_offset(text.c_str(), caret_position, clip_text ? w : -1, wrap_text);
+				f32 caret_x = 0.f, caret_y = 0.f;
+				renderer->get_char_offset(caret_x, caret_y, text.c_str(), caret_position, clip_text ? w : -1, wrap_text);
 
 				overlay_element caret;
 				caret.set_pos(static_cast<u16>(caret_x) + padding_left + x, static_cast<u16>(caret_y) + padding_top + y);
