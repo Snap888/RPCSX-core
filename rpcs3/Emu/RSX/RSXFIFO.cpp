@@ -45,7 +45,11 @@ namespace rsx
 		void FIFO_control::idle_wait() const
 		{
 #if defined(ARCH_ARM64)
-			if (rpcs3::utils::low_power_wait_enabled())
+			// Gated on the explicit WFE toggle (default off), NOT battery-saver:
+			// the park trades a little wake latency for power, so it stays opt-in to
+			// keep the default smooth. Battery-saver still does the bigger, jitter-
+			// free getllar/present wins.
+			if (rx::wfe_enabled())
 			{
 				// Park on the FIFO 'put' register (raw bytes). The CPU writes put to
 				// submit new commands, which clears the WFE monitor and wakes us

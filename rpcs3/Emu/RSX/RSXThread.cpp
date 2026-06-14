@@ -877,8 +877,9 @@ namespace rsx
 #if defined(ARCH_ARM64)
 		// Low-power path: keep cpu_wait's flush + pause/exit handling, but park the
 		// core on the watched line instead of spinning via yield(). Gated on the
-		// coupled toggle so battery-saver users also get this proven park.
-		if (rpcs3::utils::low_power_wait_enabled() && !external_interrupt_lock
+		// explicit WFE toggle (default off) so it stays opt-in - the park adds a
+		// little wake latency, so the smooth default does not use it.
+		if (rx::wfe_enabled() && !external_interrupt_lock
 			&& (state & (cpu_flag::dbg_global_pause + cpu_flag::exit)) != cpu_flag::dbg_global_pause)
 		{
 			on_semaphore_acquire_wait();
