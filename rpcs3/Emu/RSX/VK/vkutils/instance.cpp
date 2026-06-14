@@ -68,11 +68,22 @@ namespace vk
 			m_debugger = nullptr;
 		}
 
+#if defined(ANDROID)
+		// Explicitly destroy every WSI surface created on this instance (including
+		// any leaked by a home-menu swapchain reinit) so the Adreno/Turnip driver
+		// releases the ANativeWindow producer claim. Reaping them via
+		// vkDestroyInstance leaves the window "in use" and the next session (e.g. a
+		// savestate reload) fails with VK_ERROR_NATIVE_WINDOW_IN_USE_KHR. All
+		// swapchains built on these surfaces are already gone by this point.
+		destroy_WSI_surfaces(m_instance);
+		m_surface = VK_NULL_HANDLE;
+#else
 		if (m_surface)
 		{
 			VK_GET_SYMBOL(vkDestroySurfaceKHR)(m_instance, m_surface, nullptr);
 			m_surface = VK_NULL_HANDLE;
 		}
+#endif
 
 		VK_GET_SYMBOL(vkDestroyInstance)(m_instance, nullptr);
 		m_instance = VK_NULL_HANDLE;
@@ -300,16 +311,17 @@ namespace vk
 			.supports_automatic_wm_reports = true,
 		};
 
-		// The VkInstance persists across a savestate reload while VKGSRender (and
-		// its swapchain) is destroyed and recreated. A leftover surface still owns
-		// the Android ANativeWindow, so creating a new one fails with
-		// VK_ERROR_NATIVE_WINDOW_IN_USE_KHR. Destroy the previous surface first
-		// (its swapchain is already gone with the old renderer).
+#if !defined(ANDROID)
+		// Re-create on the same instance (desktop): release the previous surface
+		// before making a new one. On Android the surface lifetime is tracked
+		// globally (see swapchain_android.hpp) and released at instance teardown,
+		// so this instance never re-owns a surface to destroy here.
 		if (m_surface != VK_NULL_HANDLE)
 		{
 			VK_GET_SYMBOL(vkDestroySurfaceKHR)(m_instance, m_surface, nullptr);
 			m_surface = VK_NULL_HANDLE;
 		}
+#endif
 
 		m_surface = make_WSI_surface(m_instance, window_handle, &surface_config);
 
