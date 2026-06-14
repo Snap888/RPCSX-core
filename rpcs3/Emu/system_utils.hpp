@@ -47,6 +47,14 @@ namespace rpcs3::utils
 	// were previously decoupled, so battery-saver users never got the WFE parks).
 	bool low_power_wait_enabled();
 
+	// Android "smooth shaders": when on (default), the VK backend bumps the
+	// default shader mode (async_recompiler) to async_with_interpreter, so new
+	// shaders render via the interpreter while compiling instead of popping in -
+	// the textbook anti-shader-stutter mode. Session-only (does not touch the
+	// saved config); an explicit non-default shader mode is left untouched.
+	void set_smooth_shaders(bool on);
+	bool get_smooth_shaders();
+
 	void configure_logs(bool force_enable = false);
 
 	u32 check_user(const std::string& user);

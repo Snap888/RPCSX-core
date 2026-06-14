@@ -3233,6 +3233,12 @@ extern "C" void _rpcsx_setWfeMode(int on) {
   rpcsx_android.notice("Power: low-power WFE waiting %s", on ? "ON" : "off");
 }
 
+extern "C" void _rpcsx_setSmoothShaders(int on) {
+  rpcs3::utils::set_smooth_shaders(on != 0);
+  rpcsx_android.notice("Video: smooth shaders (async interpreter) %s",
+                       on ? "ON" : "off");
+}
+
 extern "C" std::string _rpcsx_getVersion() {
   return rx::getVersion().toString();
 }

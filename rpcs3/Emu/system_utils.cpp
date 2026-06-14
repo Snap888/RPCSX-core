@@ -62,6 +62,18 @@ namespace rpcs3::utils
 		return g_power_save_mode.load(std::memory_order_relaxed) || rx::wfe_enabled();
 	}
 
+	static std::atomic<bool> g_smooth_shaders{true};
+
+	void set_smooth_shaders(bool on)
+	{
+		g_smooth_shaders.store(on, std::memory_order_relaxed);
+	}
+
+	bool get_smooth_shaders()
+	{
+		return g_smooth_shaders.load(std::memory_order_relaxed);
+	}
+
 	u32 get_max_threads()
 	{
 		const u32 max_threads = static_cast<u32>(g_cfg.core.llvm_threads);

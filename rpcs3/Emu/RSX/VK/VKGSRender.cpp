@@ -15,6 +15,7 @@
 #include "vkutils/scratch.h"
 
 #include "Emu/RSX/rsx_methods.h"
+#include "Emu/system_utils.hpp"
 #include "Emu/RSX/Host/MM.h"
 #include "Emu/RSX/Host/RSXDMAWriter.h"
 #include "Emu/RSX/NV47/HW/context_accessors.define.h"
@@ -408,6 +409,21 @@ u64 VKGSRender::get_cycles()
 
 VKGSRender::VKGSRender(utils::serial* ar) noexcept : GSRender(ar)
 {
+#ifdef ANDROID
+	// Android "smooth shaders": bump the default shader mode to the interpreter
+	// so new shaders render via the interpreter while compiling instead of
+	// popping in / skipping the draw (the textbook anti-shader-stutter mode).
+	// Only the default async_recompiler is bumped; explicit recompiler/
+	// interpreter_only choices are kept. Session-only (the saved config is
+	// untouched). Done before the shadermode read below allocates interpreter
+	// buffers, so they are created when this kicks in. Toggleable from the app.
+	if (rpcs3::utils::get_smooth_shaders() && g_cfg.video.shadermode.get() == shader_mode::async_recompiler)
+	{
+		g_cfg.video.shadermode.set(shader_mode::async_with_interpreter);
+		rsx_log.notice("Android: smooth shaders on - using async_with_interpreter to avoid shader-compile stutter.");
+	}
+#endif
+
 	// Initialize dependencies
 	g_fxo->need<rsx::dma_manager>();
 
