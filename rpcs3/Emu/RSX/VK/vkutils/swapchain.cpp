@@ -151,6 +151,13 @@ namespace vk
 
 		swapchain_images.clear();
 
+		// The old swapchain was just destroyed above, so the previous surface(s)
+		// for this instance no longer back any swapchain. Destroy them now instead
+		// of letting them accumulate on the ANativeWindow until instance teardown:
+		// repeated home-menu reinits would otherwise pile up live surfaces on the
+		// one window and can re-trigger NATIVE_WINDOW_IN_USE within a session.
+		destroy_WSI_surfaces(dev.gpu());
+
 		WSI_config config{};
 		m_surface = make_WSI_surface(dev.gpu(), handle, &config);
 #endif
