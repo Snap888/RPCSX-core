@@ -79,7 +79,11 @@ namespace rsx
 					}
 				}
 
-				RSX(ctx)->cpu_wait({});
+				// Park on the semaphore cacheline (low-power, opt-in) so the RSX
+				// core sleeps until the CPU writes it, instead of spin-yielding.
+				// Compared as raw bytes; the loop re-checks sema/timeout each wake.
+				const u32* const watch = reinterpret_cast<const u32*>(&sema);
+				RSX(ctx)->cpu_wait_on(watch, *static_cast<const volatile u32*>(watch));
 			}
 
 			RSX(ctx)->fifo_wake_delay();

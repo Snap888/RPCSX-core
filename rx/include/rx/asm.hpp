@@ -313,6 +313,32 @@ inline void busy_wait(usz cycles = 3000) {
   while (get_tsc() < stop);
 }
 
+#if defined(ARCH_ARM64)
+// Opt-in low-power waiting (Android battery/thermal). Off by default.
+inline std::atomic<bool> g_use_wfe{false};
+inline void set_wfe_mode(bool on) { g_use_wfe.store(on, std::memory_order_relaxed); }
+inline bool wfe_enabled() { return g_use_wfe.load(std::memory_order_relaxed); }
+
+// Park the core on a 4-byte cacheline (ARMv8.0 ldaxr+wfe) until a write to that
+// line from any core clears the exclusive monitor, or a spurious event wakes WFE.
+// ONE park per call - the caller's loop must re-check the real condition and any
+// timeout afterwards (so recovery/test_stopped paths still run). Lost-wakeup-free:
+// it re-loads under the monitor and bails immediately if the line already changed
+// from `keep` (the raw 32-bit value the caller last observed). Compared as raw
+// bytes, so endianness is irrelevant - we only detect "did the line change".
+inline void wfe_park(const u32* addr, u32 keep)
+{
+  u32 v;
+  __asm__ volatile("ldaxr %w0, [%1]" : "=r"(v) : "r"(addr) : "memory");
+  if (v != keep)
+    return;
+  __asm__ volatile("wfe" ::: "memory");
+}
+#else
+inline void set_wfe_mode(bool /*on*/) {}
+inline bool wfe_enabled() { return false; }
+#endif
+
 // Align to power of 2
 template <typename T, typename U>
   requires std::is_unsigned_v<T>

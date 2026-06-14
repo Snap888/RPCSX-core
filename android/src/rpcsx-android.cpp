@@ -3216,6 +3216,11 @@ extern "C" void _rpcsx_setCpuAffinityMode(int on) {
   thread_ctrl::set_android_affinity(on != 0);
 }
 
+// Android experimental: low-power WFE waiting (RSX semaphore park).
+extern "C" void _rpcsx_setWfeMode(int on) {
+  rx::set_wfe_mode(on != 0);
+}
+
 extern "C" std::string _rpcsx_getVersion() {
   return rx::getVersion().toString();
 }

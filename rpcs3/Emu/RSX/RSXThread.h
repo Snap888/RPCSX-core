@@ -190,6 +190,11 @@ namespace rsx
 		void dump_regs(std::string&, std::any& custom_data) const override;
 		void cpu_wait(rx::EnumBitSet<cpu_flag> old) override;
 
+		// Like cpu_wait, but parks on a 4-byte watched address via WFE when the
+		// opt-in low-power mode is on (Android). `keep` is the raw 32-bit value the
+		// caller last observed at *watch; a write to that line wakes the park.
+		void cpu_wait_on(const u32* watch, u32 keep);
+
 		static constexpr u32 id_base = 0x5555'5555; // See get_current_cpu_thread()
 
 		// Performance approximation counters
