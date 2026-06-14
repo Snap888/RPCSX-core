@@ -494,7 +494,7 @@ namespace vk
 		}
 	}
 
-	vk::image_view* ui_overlay_renderer::find_font(rsx::overlays::font* font, vk::command_buffer& cmd, vk::data_heap& upload_heap)
+	vk::image_view* ui_overlay_renderer::find_font(const rsx::overlays::font* font, vk::command_buffer& cmd, vk::data_heap& upload_heap)
 	{
 		const auto image_size = font->get_glyph_data_dimensions();
 
@@ -522,7 +522,7 @@ namespace vk
 			true, false, bytes.data(), -1);
 	}
 
-	vk::image_view* ui_overlay_renderer::find_temp_image(rsx::overlays::image_info_base* desc, vk::command_buffer& cmd, vk::data_heap& upload_heap, u32 owner_uid)
+	vk::image_view* ui_overlay_renderer::find_temp_image(const rsx::overlays::image_info_base* desc, vk::command_buffer& cmd, vk::data_heap& upload_heap, u32 owner_uid)
 	{
 		const bool dirty = std::exchange(desc->dirty, false);
 		const u64 key = reinterpret_cast<u64>(desc);
@@ -552,7 +552,7 @@ namespace vk
 				.size = 68},
 			{.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
 				.offset = 68,
-				.size = 12}};
+				.size = 60}};
 	}
 
 	void ui_overlay_renderer::update_uniforms(vk::command_buffer& cmd, vk::glsl::program* /*program*/)
@@ -566,6 +566,10 @@ namespace vk
 		// 68: uint fragment_config;
 		// 72: float timestamp;
 		// 76: float blur_intensity;
+		// 80: vec4 sdf_params;       (hx, hy, br, bw)
+		// 96: vec2 sdf_origin;       (cx, cy)
+		// 104: vec2 reserved;
+		// 112: vec4 sdf_border_color;
 
 		f32 push_buf[32];
 		// 1. Vertex config (00 - 63)
@@ -596,13 +600,23 @@ namespace vk
 		                             .texture_mode(m_texture_type)
 		                             .clip_fragments(m_clip_enabled)
 		                             .pulse_glow(m_pulse_glow)
+		                             .set_sdf(m_sdf_config.func)
 		                             .get();
 
 		push_buf[0] = std::bit_cast<f32>(frag_config);
 		push_buf[1] = m_time;
 		push_buf[2] = m_blur_strength;
+		push_buf[3] = m_sdf_config.hx;
+		push_buf[4] = m_sdf_config.hy;
+		push_buf[5] = m_sdf_config.br;
+		push_buf[6] = m_sdf_config.bw;
+		push_buf[7] = m_sdf_config.cx;
+		push_buf[8] = m_sdf_config.cy;
+		push_buf[9] = 0.f;
+		push_buf[10] = 0.f;
+		std::memcpy(push_buf + 11, m_sdf_config.border_color.rgba, 16);
 
-		VK_GET_SYMBOL(vkCmdPushConstants)(cmd, m_pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 68, 12, push_buf);
+		VK_GET_SYMBOL(vkCmdPushConstants)(cmd, m_pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 68, 60, push_buf);
 	}
 
 	void ui_overlay_renderer::set_primitive_type(rsx::overlays::primitive_type type)
@@ -681,6 +695,11 @@ namespace vk
 			m_clip_region = command.config.clip_rect;
 			m_disable_vertex_snap = command.config.disable_vertex_snap;
 
+			// SDF shapes (rounded rects/ellipses) are authored in the overlay's virtual
+			// viewport; scale them into the actual render viewport before upload.
+			m_sdf_config = command.config.sdf_config;
+			m_sdf_config.transform(static_cast<areaf>(viewport), { static_cast<f32>(ui.virtual_width), static_cast<f32>(ui.virtual_height) });
+
 			vk::image_view* src = nullptr;
 			switch (command.config.texture_ref)
 			{
@@ -695,7 +714,7 @@ namespace vk
 				m_texture_type = src->image()->layers() == 1 ? rsx::overlays::texture_sampling_mode::font2D : rsx::overlays::texture_sampling_mode::font3D;
 				break;
 			case rsx::overlays::image_resource_id::raw_image:
-				src = find_temp_image(static_cast<rsx::overlays::image_info_base*>(command.config.external_data_ref), cmd, upload_heap, ui.uid);
+				src = find_temp_image(static_cast<const rsx::overlays::image_info_base*>(command.config.external_data_ref), cmd, upload_heap, ui.uid);
 				break;
 			default:
 				src = view_cache[command.config.texture_ref].get();

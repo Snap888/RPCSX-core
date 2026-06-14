@@ -9,15 +9,129 @@ namespace rsx
 		home_menu_settings::home_menu_settings(s16 x, s16 y, u16 width, u16 height, bool use_separators, home_menu_page* parent)
 			: home_menu_page(x, y, width, height, use_separators, parent, get_localized_string(localized_string_id::HOME_MENU_SETTINGS))
 		{
-			add_page(std::make_shared<home_menu_settings_audio>(x, y, width, height, use_separators, this));
-			add_page(std::make_shared<home_menu_settings_video>(x, y, width, height, use_separators, this));
-			add_page(std::make_shared<home_menu_settings_input>(x, y, width, height, use_separators, this));
-			add_page(std::make_shared<home_menu_settings_advanced>(x, y, width, height, use_separators, this));
-			add_page(std::make_shared<home_menu_settings_overlays>(x, y, width, height, use_separators, this));
-			add_page(std::make_shared<home_menu_settings_performance_overlay>(x, y, width, height, use_separators, this));
-			add_page(std::make_shared<home_menu_settings_debug>(x, y, width, height, use_separators, this));
+			m_tabs = std::make_unique<tabbed_container>(width, height, 300);
+			m_tabs->set_pos(x, y);
+			m_tabs->set_headers_background_color({ 0.25f, 0.25f, 0.25f, 0.95f });
 
-			apply_layout();
+			add_page(home_menu::fa_icon::audio, std::make_shared<home_menu_settings_audio>(x, y, width, height, use_separators, nullptr));
+			add_page(home_menu::fa_icon::video, std::make_shared<home_menu_settings_video>(x, y, width, height, use_separators, nullptr));
+			add_page(home_menu::fa_icon::gamepad, std::make_shared<home_menu_settings_input>(x, y, width, height, use_separators, nullptr));
+			add_page(home_menu::fa_icon::settings, std::make_shared<home_menu_settings_advanced>(x, y, width, height, use_separators, nullptr));
+			add_page(home_menu::fa_icon::settings_sliders, std::make_shared<home_menu_settings_overlays>(x, y, width, height, use_separators, nullptr));
+			add_page(home_menu::fa_icon::settings_gauge, std::make_shared<home_menu_settings_performance_overlay>(x, y, width, height, use_separators, nullptr));
+			add_page(home_menu::fa_icon::bug, std::make_shared<home_menu_settings_debug>(x, y, width, height, use_separators, nullptr));
+
+			// Select the first item
+			m_tabs->set_selected_tab(0);
+		}
+
+		void home_menu_settings::add_page(home_menu::fa_icon icon, std::shared_ptr<home_menu_page> page)
+		{
+			auto panel = std::static_pointer_cast<overlay_element>(page);
+			page->on_deactivate();
+			page->hide_prompt_buttons();
+
+			if (icon == home_menu::fa_icon::none)
+			{
+				m_tabs->add_tab(page->title, panel);
+				return;
+			}
+
+			// Custom tab header. Matches the main menu style
+			std::unique_ptr<overlay_element> label_widget = std::make_unique<label>(page->title);
+			label_widget->set_size(300, 60);
+			label_widget->set_font("Arial", 16);
+			label_widget->back_color.a = 0.f;
+			label_widget->set_padding(16, 4, 16, 4);
+
+			auto icon_info = ensure(home_menu::get_icon(icon));
+			auto icon_view = std::make_unique<image_view>();
+			icon_view->set_raw_image(icon_info);
+			icon_view->set_size(42, 60);
+			icon_view->set_padding(18, 0, 18, 18);
+
+			auto box = std::make_unique<horizontal_layout>();
+			box->set_size(0, 16);
+			box->set_padding(1);
+			box->add_element(icon_view);
+			box->add_element(label_widget);
+
+			m_tabs->add_tab(box, panel);
+		}
+
+		page_navigation home_menu_settings::handle_button_press(pad_button button_press, bool is_auto_repeat, u64 auto_repeat_interval_ms)
+		{
+			if (!m_tabs->is_in_selection_mode())
+			{
+				auto page = ensure(dynamic_cast<home_menu_page*>(m_tabs->get_selected()));
+				const auto nav_action = page->handle_button_press(button_press, is_auto_repeat, auto_repeat_interval_ms);
+				switch (nav_action)
+				{
+				case page_navigation::exit:
+					m_tabs->toggle_selection_mode();
+					page->on_deactivate();
+					return page_navigation::stay;
+				default:
+					return nav_action;
+				}
+			}
+
+			const auto prev_tab = m_tabs->get_selected_idx();
+			auto next_tab = prev_tab;
+
+			page_navigation action = page_navigation::stay;
+			sound_effect sound = sound_effect::cursor;
+			bool do_play_sound = !is_auto_repeat || auto_repeat_interval_ms >= user_interface::m_auto_repeat_ms_interval_default;
+
+			switch (button_press)
+			{
+			case pad_button::dpad_up:
+			case pad_button::ls_up:
+				next_tab = (prev_tab > 0)
+					? (prev_tab - 1)
+					: (m_tabs->tab_count() - 1);
+				break;
+			case pad_button::dpad_down:
+			case pad_button::ls_down:
+				next_tab = ((prev_tab + 1) >= m_tabs->tab_count())
+					? 0
+					: prev_tab + 1;
+				break;
+			case pad_button::cross:
+				sound = sound_effect::accept;
+				m_tabs->toggle_selection_mode();
+				ensure(dynamic_cast<home_menu_page*>(m_tabs->get_selected()))->on_activate();
+				break;
+			case pad_button::circle:
+				set_current_page(this->parent);
+				action = this->parent ? page_navigation::back : page_navigation::exit;
+				sound = sound_effect::cancel;
+				break;
+			default:
+				do_play_sound = false;
+				break;
+			}
+
+			if (prev_tab != next_tab)
+			{
+				m_tabs->set_selected_tab(next_tab);
+			}
+
+			// Play a sound unless this is a fast auto repeat which would induce a nasty noise
+			if (do_play_sound)
+			{
+				play_sound(sound);
+			}
+
+			return action;
+		}
+
+		compiled_resource& home_menu_settings::get_compiled()
+		{
+			// TODO: Caching
+			compiled_resources = home_menu_page::get_compiled();
+			compiled_resources.add(m_tabs->get_compiled());
+			return compiled_resources;
 		}
 
 		home_menu_settings_audio::home_menu_settings_audio(s16 x, s16 y, u16 width, u16 height, bool use_separators, home_menu_page* parent)
@@ -139,5 +253,5 @@ namespace rsx
 
 			apply_layout();
 		}
-	} // namespace overlays
-} // namespace rsx
+	}
+}

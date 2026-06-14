@@ -436,6 +436,8 @@ static std::pair<std::string, std::u32string> g_strings[] = {
     MAKE_STRING(HOME_MENU_SETTINGS, "Settings"),
     MAKE_STRING(HOME_MENU_SETTINGS_SAVE, "Save custom configuration?"),
     MAKE_STRING(HOME_MENU_SETTINGS_SAVE_BUTTON, "Save"),
+    MAKE_STRING(HOME_MENU_SETTINGS_RESET_BUTTON, "To default"),
+    MAKE_STRING(HOME_MENU_TOGGLE_FULLSCREEN, "Toggle Fullscreen"),
     MAKE_STRING(HOME_MENU_SETTINGS_DISCARD,
                 "Discard the current settings' changes?"),
     MAKE_STRING(HOME_MENU_SETTINGS_DISCARD_BUTTON, "Discard"),
