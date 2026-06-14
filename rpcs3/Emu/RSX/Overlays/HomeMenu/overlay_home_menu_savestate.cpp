@@ -15,7 +15,8 @@ namespace rsx
 			const bool suspend_mode = g_cfg.savestate.suspend_emu.get();
 
 			std::unique_ptr<overlay_element> save_state = std::make_unique<home_menu_entry>(
-				get_localized_string(suspend_mode ? localized_string_id::HOME_MENU_SAVESTATE_AND_EXIT : localized_string_id::HOME_MENU_SAVESTATE_SAVE));
+				suspend_mode ? home_menu::fa_icon::poweroff : home_menu::fa_icon::floppy,
+				get_localized_string(suspend_mode ? localized_string_id::HOME_MENU_SAVESTATE_AND_EXIT : localized_string_id::HOME_MENU_SAVESTATE_SAVE), width, text_align::left);
 
 			add_item(save_state, [suspend_mode](pad_button btn) -> page_navigation
 				{
@@ -42,7 +43,7 @@ namespace rsx
 			if (!suspend_mode && boot_last_savestate(true))
 			{
 				std::unique_ptr<overlay_element> reload_state = std::make_unique<home_menu_entry>(
-					get_localized_string(localized_string_id::HOME_MENU_RELOAD_SAVESTATE));
+					home_menu::fa_icon::restart, get_localized_string(localized_string_id::HOME_MENU_RELOAD_SAVESTATE), width, text_align::left);
 
 				add_item(reload_state, [](pad_button btn) -> page_navigation
 					{
