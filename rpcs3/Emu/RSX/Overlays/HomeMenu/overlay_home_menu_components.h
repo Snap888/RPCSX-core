@@ -116,6 +116,31 @@ namespace rsx
 			checkbox* m_checkbox = nullptr;
 		};
 
+		// Callback-driven checkbox for the Android fork's "Clanker" feature toggles.
+		// Unlike home_menu_checkbox it is not bound to a cfg::_bool - it reads its
+		// state from a getter callback and is toggled via a setter (wired by the
+		// page to our live runtime flags: battery saver, WFE, smooth shaders, E-core
+		// affinity). This lets those flags be flipped from the in-game home menu to
+		// ease on-device testing without leaving the game. The label is raw text so
+		// no localized_string_id table entry is required.
+		struct home_menu_clanker_checkbox : public horizontal_layout
+		{
+		public:
+			home_menu_clanker_checkbox(std::function<bool()> getter, std::string text);
+
+			void set_reserved_width(u16 size) { m_reserved_width = size; }
+			void set_size(u16 w, u16 h = element_height) override;
+			void update_value(bool initializing = false);
+			compiled_resource& get_compiled() override;
+
+		private:
+			std::function<bool()> m_getter;
+			std::string m_label_text;
+			u16 m_reserved_width = 0;
+			bool m_last_value = false;
+			checkbox* m_checkbox = nullptr;
+		};
+
 		template <typename T>
 		struct home_menu_dropdown : public home_menu_setting<T, cfg::_enum<T>>
 		{

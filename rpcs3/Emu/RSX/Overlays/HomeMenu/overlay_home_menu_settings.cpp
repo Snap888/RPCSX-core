@@ -1,6 +1,9 @@
 #include "stdafx.h"
 #include "overlay_home_menu_settings.h"
 #include "Emu/system_config.h"
+#include "Emu/system_utils.hpp"
+#include "util/Thread.h"
+#include "rx/asm.hpp"
 
 namespace rsx
 {
@@ -20,6 +23,7 @@ namespace rsx
 			add_page(home_menu::fa_icon::settings_sliders, std::make_shared<home_menu_settings_overlays>(x, y, width, height, use_separators, nullptr));
 			add_page(home_menu::fa_icon::settings_gauge, std::make_shared<home_menu_settings_performance_overlay>(x, y, width, height, use_separators, nullptr));
 			add_page(home_menu::fa_icon::bug, std::make_shared<home_menu_settings_debug>(x, y, width, height, use_separators, nullptr));
+			add_page(home_menu::fa_icon::settings_gauge, std::make_shared<home_menu_settings_clanker>(x, y, width, height, use_separators, nullptr));
 
 			// Select the first item
 			m_tabs->set_selected_tab(0);
@@ -250,6 +254,37 @@ namespace rsx
 			add_checkbox(&g_cfg.io.debug_overlay, localized_string_id::HOME_MENU_SETTINGS_DEBUG_INPUT_OVERLAY);
 			add_checkbox(&g_cfg.video.disable_video_output, localized_string_id::HOME_MENU_SETTINGS_DEBUG_DISABLE_VIDEO_OUTPUT);
 			add_float_slider(&g_cfg.video.texture_lod_bias, localized_string_id::HOME_MENU_SETTINGS_DEBUG_TEXTURE_LOD_BIAS, "", 0.25f);
+
+			apply_layout();
+		}
+
+		// Android fork: in-game quick access to the "Clanker" runtime feature flags
+		// so they can be flipped without leaving the game (eases on-device testing).
+		// Battery saver and WFE take effect live at the next idle/spin site; smooth
+		// shaders and CPU affinity are read when the render/threads are created, so
+		// they apply on the next game boot (noted in the labels).
+		home_menu_settings_clanker::home_menu_settings_clanker(s16 x, s16 y, u16 width, u16 height, bool use_separators, home_menu_page* parent)
+			: home_menu_settings_page(x, y, width, height, use_separators, parent, "Clanker Features")
+		{
+			add_clanker_checkbox(
+				[]() { return rpcs3::utils::get_power_save_mode(); },
+				[](bool v) { rpcs3::utils::set_power_save_mode(v); },
+				"Battery saver (FIFO present + park idle SPU waits)");
+
+			add_clanker_checkbox(
+				[]() { return rx::wfe_enabled(); },
+				[](bool v) { rx::set_wfe_mode(v); },
+				"Low-power CPU waits (WFE)");
+
+			add_clanker_checkbox(
+				[]() { return rpcs3::utils::get_smooth_shaders(); },
+				[](bool v) { rpcs3::utils::set_smooth_shaders(v); },
+				"Smooth shaders - experimental (restart game to apply)");
+
+			add_clanker_checkbox(
+				[]() { return thread_ctrl::android_affinity_enabled(); },
+				[](bool v) { thread_ctrl::set_android_affinity(v); },
+				"Efficiency-core affinity (restart game to apply)");
 
 			apply_layout();
 		}
