@@ -132,18 +132,26 @@ namespace spirv
 
 		glslang::EShClient client;
 		glslang::EShTargetClientVersion target_version;
+		glslang::EShTargetLanguageVersion spirv_version;
 		EShMessages msg;
 
 		if (rules == ::glsl::glsl_rules_vulkan)
 		{
 			client = glslang::EShClientVulkan;
-			target_version = glslang::EShTargetClientVersion::EShTargetVulkan_1_0;
+			// Target Vulkan 1.2 / SPIR-V 1.5 (0.0.41). SPIR-V 1.5 is core in Vulkan
+			// 1.2+; our Android target devices (armv8.4-a, e.g. Adreno 740 = Vulkan
+			// 1.3) support it. TODO before a broad release: make this device-aware
+			// (fall back to SpV 1.0/1.3 on Vulkan <1.2 devices) - some old/low-end
+			// Android Vulkan 1.0/1.1 drivers may reject SPIR-V 1.5 modules.
+			target_version = glslang::EShTargetClientVersion::EShTargetVulkan_1_2;
+			spirv_version = glslang::EShTargetLanguageVersion::EShTargetSpv_1_5;
 			msg = static_cast<EShMessages>(EShMsgVulkanRules | EShMsgSpvRules | EShMsgEnhanced);
 		}
 		else
 		{
 			client = glslang::EShClientOpenGL;
 			target_version = glslang::EShTargetClientVersion::EShTargetOpenGL_450;
+			spirv_version = glslang::EShTargetLanguageVersion::EShTargetSpv_1_0;
 			msg = static_cast<EShMessages>(EShMsgDefault | EShMsgSpvRules | EShMsgEnhanced);
 		}
 
@@ -152,7 +160,7 @@ namespace spirv
 
 		shader_object.setEnvInput(glslang::EShSourceGlsl, lang, client, 100);
 		shader_object.setEnvClient(client, target_version);
-		shader_object.setEnvTarget(glslang::EshTargetSpv, glslang::EShTargetLanguageVersion::EShTargetSpv_1_0);
+		shader_object.setEnvTarget(glslang::EshTargetSpv, spirv_version);
 
 		bool success = false;
 		const char* shader_text = shader.data();
