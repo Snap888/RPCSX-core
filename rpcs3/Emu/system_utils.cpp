@@ -62,7 +62,11 @@ namespace rpcs3::utils
 		return g_power_save_mode.load(std::memory_order_relaxed) || rx::wfe_enabled();
 	}
 
-	static std::atomic<bool> g_smooth_shaders{true};
+	// Default OFF: our shader-interpreter snapshot compiles pipelines synchronously
+	// on the RSX thread (pre-rework), so forcing async_with_interpreter causes full
+	// freezes on new shaders. Opt-in toggle until the upstream async-variant
+	// interpreter rework is ported.
+	static std::atomic<bool> g_smooth_shaders{false};
 
 	void set_smooth_shaders(bool on)
 	{
