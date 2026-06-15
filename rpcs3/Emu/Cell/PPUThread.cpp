@@ -4303,7 +4303,18 @@ extern void ppu_precompile(std::vector<std::string>& dir_queue, std::vector<ppu_
 
 	lf_queue<file_info> possible_exec_file_paths;
 
-	concurent_memory_limit memory_limit(utils::get_total_memory() / 3);
+	u64 compile_budget = utils::get_total_memory() / 3;
+#ifdef ANDROID
+	// get_total_memory() reports device RAM (sysconf), but the app process cannot
+	// actually allocate RAM/3 for LLVM (per-app limits + the emulation's own
+	// footprint + heap fragmentation). A large game (Mafia II: ~1.67GB per module)
+	// compiled by 2 workers concurrently blew this and aborted (bad_alloc), so cap
+	// the budget. With the cap, at most one ~1.7GB module compiles at a time
+	// (others wait via the memory_limit) instead of OOMing; small modules still
+	// run concurrently. 2 GiB keeps the peak well under the observed ~3.3GB OOM.
+	compile_budget = std::min<u64>(compile_budget, 2048ull * 1024 * 1024);
+#endif
+	concurent_memory_limit memory_limit(compile_budget);
 
 	u32 software_thread_limit = std::min<u32>(g_cfg.core.llvm_threads ? g_cfg.core.llvm_threads : u32{umax}, ::size32(file_queue));
 	if (const u32 cap = rpcs3::utils::get_compile_thread_cap(); cap > 0)
