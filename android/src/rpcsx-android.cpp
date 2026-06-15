@@ -1432,6 +1432,17 @@ private:
 
     MessageDialog::pushPendingProgressId(workload.progressId);
 
+    // If a previous game boot was killed, Emu.Kill() -> g_fxo->clear() leaves the
+    // fixed-object map torn down (m_order/m_info nulled). The single-type init<>()
+    // calls below do `*m_order++ = obj`, which segfaults on a null m_order
+    // (write to 0x0). reset() reallocates the bookkeeping arrays so the precompile
+    // gets a clean fxo - this mirrors upstream's precompile path (Emulator::Load),
+    // where Emu.Init()/reset() always runs before these inits. Guarded so we don't
+    // tear down an fxo that is already live (e.g. a game sitting in the ready state).
+    if (!g_fxo->is_init()) {
+      g_fxo->reset();
+    }
+
     g_fxo->init<named_thread<progress_dialog_server>>();
     g_fxo->init<main_ppu_module<lv2_obj>>();
     g_fxo->init(false, nullptr);
@@ -1688,7 +1699,22 @@ static void setupCallbacks() {
         }
         return U"";
       },
-      .get_localized_setting = [](auto...) { return ""; },
+      .get_localized_setting =
+          [](const cfg::_base *node, u32 enum_index) -> std::string {
+        // The home-menu dropdowns build their option list by calling this once
+        // per enum index. Returning "" (the old stub) left every dropdown blank.
+        // We have no translation table on Android, so surface the config enum's
+        // own token (e.g. "Vulkan", "Mega", "Automatic") via to_list(), which is
+        // already human-readable. Falls back to "" only for out-of-range/non-enum.
+        if (!node) {
+          return "";
+        }
+        const std::vector<std::string> list = node->to_list();
+        if (enum_index < list.size()) {
+          return list[enum_index];
+        }
+        return "";
+      },
       .play_sound = [](auto...) {},
       .get_image_info = [](auto...) { return false; },
       .get_scaled_image = [](auto...) { return false; },
