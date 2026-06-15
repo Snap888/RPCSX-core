@@ -297,6 +297,7 @@ target_sources(rpcs3_emu PRIVATE
     RSX/Program/FragmentProgramRegister.cpp
     RSX/Program/GLSLCommon.cpp
     RSX/Program/ProgramStateCache.cpp
+    RSX/Program/ShaderInterpreter.cpp
     RSX/Program/program_util.cpp
     RSX/Program/SPIRVCommon.cpp
     RSX/Program/VertexProgramDecompiler.cpp
