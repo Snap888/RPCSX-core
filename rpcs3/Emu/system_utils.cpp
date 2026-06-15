@@ -33,6 +33,25 @@ namespace rpcs3::utils
 		return g_compile_thread_cap.load(std::memory_order_relaxed);
 	}
 
+	// App-provided LLVM compile MEMORY budget in bytes (0 = unset). On Android,
+	// utils::get_total_memory() over-reports (sysconf counts zRAM pages), so the
+	// stock total/3 budget is far larger than what the process can actually
+	// allocate before the Low Memory Killer fires. The app derives a device-scaled,
+	// usable figure (ActivityManager) and pushes it here; the PPU compiler uses it
+	// as the concurrent-compile memory ceiling so large modules serialize instead
+	// of OOMing. See PPUThread.cpp.
+	static std::atomic<u64> g_compile_memory_budget{0};
+
+	void set_compile_memory_budget(u64 bytes)
+	{
+		g_compile_memory_budget.store(bytes, std::memory_order_relaxed);
+	}
+
+	u64 get_compile_memory_budget()
+	{
+		return g_compile_memory_budget.load(std::memory_order_relaxed);
+	}
+
 	static std::atomic<bool> g_power_save_mode{false};
 
 	void set_power_save_mode(bool on)

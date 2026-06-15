@@ -3235,6 +3235,15 @@ extern "C" void _rpcsx_setMaxCompileThreads(int count) {
   rpcs3::utils::set_compile_thread_cap(count > 0 ? static_cast<u32>(count) : 0u);
 }
 
+// Android LLVM compile MEMORY budget in bytes (the concurrent-compile RAM ceiling
+// the PPU compiler uses instead of the unreliable get_total_memory()/3). The app
+// derives a device-scaled, usable figure from ActivityManager. <=0 = unset (core
+// falls back to its corrected internal cap).
+extern "C" void _rpcsx_setCompileMemoryBudget(long long bytes) {
+  rpcs3::utils::set_compile_memory_budget(bytes > 0 ? static_cast<u64>(bytes) : 0ull);
+  rpcsx_android.notice("Compile memory budget set to %lld bytes", bytes);
+}
+
 // Android battery-saver toggle (see rpcs3::utils::get_power_save_mode).
 extern "C" void _rpcsx_setPowerSaveMode(int on) {
   rpcs3::utils::set_power_save_mode(on != 0);

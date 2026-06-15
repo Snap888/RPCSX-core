@@ -26,6 +26,16 @@ namespace rpcs3::utils
 	void set_compile_thread_cap(u32 cap);
 	u32 get_compile_thread_cap();
 
+	// Android compile MEMORY budget (bytes; 0 = unset). The PPU LLVM compiler uses
+	// this as the concurrent-compile memory ceiling instead of the unreliable
+	// get_total_memory()/3 (which over-reports on Android via zRAM page counting).
+	// The app pushes a device-scaled, usable figure via JNI. Sized below the
+	// largest expected single module so big modules serialize (one at a time) while
+	// small modules still compile concurrently - the OOM guard is the budget, not
+	// the thread count.
+	void set_compile_memory_budget(u64 bytes);
+	u64 get_compile_memory_budget();
+
 	// Android battery-saver. When on, the core makes low-power choices at the
 	// EFFECTIVE level (so a saved/per-game config can't undo it, like the compile
 	// cap): forces FIFO present (caps the GPU to the display) and collapses the
