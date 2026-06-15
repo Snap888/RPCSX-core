@@ -2277,6 +2277,13 @@ namespace rsx
 					case CELL_GCM_TEXTURE_R5G6B5:
 					case CELL_GCM_TEXTURE_R6G5B5:
 						texture_control |= (1 << texture_control_bits::RENORMALIZE);
+						// 0.0.41 specialization gates the texel format-conversion code
+						// (renormalize/sext/gamma/BX2) behind RSX_SHADER_CONTROL_TEXTURE_
+						// FORMAT_CONVERT. Our producer lacks upstream's format_ex object, so
+						// we must raise the bit here whenever a conversion is actually needed,
+						// or _process_texel collapses to passthrough and textures sample raw
+						// (BX2 normal maps -> garbage normals -> models render black/invisible).
+						current_fragment_program.ctrl |= RSX_SHADER_CONTROL_TEXTURE_FORMAT_CONVERT;
 						break;
 					default:
 						break;
@@ -2336,6 +2343,14 @@ namespace rsx
 					}
 
 					texture_control |= argb8_convert;
+
+					// See the RENORMALIZE note above: raise the format-convert ctrl bit so
+					// the gated sext/gamma/BX2 texel conversion is actually emitted. Covers
+					// signed/gamma/BX2 8-bit-remapped formats that don't hit RENORMALIZE.
+					if (argb8_convert)
+					{
+						current_fragment_program.ctrl |= RSX_SHADER_CONTROL_TEXTURE_FORMAT_CONVERT;
+					}
 				}
 
 				current_fragment_program.texture_params[i].control = texture_control;
