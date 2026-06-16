@@ -374,6 +374,16 @@ void VKFragmentDecompilerThread::insertMainEnd(std::stringstream& OS)
 	OS << "\n"
 	   << "	fs_main();\n\n";
 
+	if (m_ctrl & RSX_SHADER_CONTROL_DISABLE_EARLY_Z)
+	{
+		// This is effectively unreachable code, but good enough to trick the GPU to skip early Z.
+		// For Vulkan, depth export has stronger semantics than discard, so writing gl_FragDepth
+		// forces LateFragmentTests - required when the depth buffer is bound cyclically (read as a
+		// texture while also being the zeta target). The producer raises this bit in RSXThread.cpp;
+		// without this consumer the early-Z hazard corrupts depth-feedback effects.
+		OS << "	gl_FragDepth = gl_FragCoord.z;\n\n";
+	}
+
 	glsl::insert_rop(OS, m_shader_props);
 
 	if (m_ctrl & CELL_GCM_SHADER_CONTROL_DEPTH_EXPORT)
