@@ -2430,6 +2430,26 @@ namespace rsx
 		// Update texture configuration
 		current_fragment_program.texture_state.import(current_fp_texture_state, current_fp_metadata.referenced_textures_mask);
 
+#ifdef ANDROID
+		// [seethru2] Confirms the see-through-geometry fix on device. Logged once per unique
+		// ctrl (this runs on the RSX thread only, so no lock is needed). A see-through-class
+		// draw showing alpha_test=1 with tex_convert=1 confirms the alpha-channel format
+		// conversion was shifting col0.a out of the unorm space alpha_ref is compared in -
+		// now fixed by preserving raw alpha in _process_texel. Temporary diagnostic.
+		{
+			static std::unordered_set<u32> s_st2_seen;
+			if (s_st2_seen.insert(current_fragment_program.ctrl).second)
+			{
+				rsx_log.warning("[seethru2] ctrl=%#x alpha_test=%d alpha_func=%u alpha_ref=%.3f tex_convert=%d",
+					current_fragment_program.ctrl,
+					m_ctx->register_state->alpha_test_enabled() ? 1 : 0,
+					static_cast<u32>(m_ctx->register_state->alpha_func()),
+					m_ctx->register_state->alpha_ref(),
+					(current_fragment_program.ctrl & RSX_SHADER_CONTROL_TEXTURE_FORMAT_CONVERT) ? 1 : 0);
+			}
+		}
+#endif
+
 		// Sanity checks
 		if (current_fragment_program.ctrl & CELL_GCM_SHADER_CONTROL_DEPTH_EXPORT)
 		{
