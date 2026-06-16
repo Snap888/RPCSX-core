@@ -2382,6 +2382,20 @@ namespace rsx
 					{
 						current_fragment_program.ctrl |= RSX_SHADER_CONTROL_TEXTURE_FORMAT_CONVERT;
 					}
+
+					// Shader-instruction BX2 (_bx2 / exp_tex): when the fragment ucode samples
+					// any texture with the bx2 modifier, seed this convertible texture's remap
+					// high bits (16-19) so _process_texel's expand path decompresses 2n-1.
+					// Mirrors upstream (RSXThread.cpp:2409). texture_params[i].remap was already
+					// set to tex.remap() above; this overwrites only the high nibble.
+					if (current_fp_metadata.bx2_texture_reads_mask)
+					{
+						current_fragment_program.ctrl |= RSX_SHADER_CONTROL_TEXTURE_FORMAT_CONVERT;
+
+						const u32 remap_hi = tex.decoded_remap().shuffle_mask_bits(0xFu);
+						current_fragment_program.texture_params[i].remap &= ~(0xFu << 16u);
+						current_fragment_program.texture_params[i].remap |= (remap_hi << 16u);
+					}
 				}
 
 				current_fragment_program.texture_params[i].control = texture_control;
@@ -3382,14 +3396,25 @@ namespace rsx
 			if (s_adpf_last_now != 0 && now_us > s_adpf_last_now)
 			{
 				const u64 wall = now_us - s_adpf_last_now;
-				const u64 idle = idle_us > s_adpf_last_idle ? idle_us - s_adpf_last_idle : 0;
-				const u64 work = wall > idle ? wall - idle : wall;
-				// work = the CPU busy time the scheduler should run fast enough to finish;
 				// period = the flip-to-flip deadline (e.g. ~33.3ms when 30fps-locked). The
-				// app uses period as the ADPF target so a 30fps game is not treated as
-				// over-budget against a fixed 60fps target (which would over-boost = more heat).
-				rpcs3::utils::report_frame_work_ns(work * 1000);
+				// app uses it as the ADPF target so a 30fps game is not judged against a fixed
+				// 60fps target (which would over-boost = more heat). Always valid.
 				rpcs3::utils::report_frame_period_ns(wall * 1000);
+
+				// work = the CPU busy time (wall minus idle) the scheduler must finish in time.
+				// performance_counters.idle_time is reset to 0 every ~30 frames by get_load(),
+				// so an idle delta that went backwards (idle_us < last) is a reset, not a real
+				// frame - skip it. Also skip when idle >= wall (idle accrues from FIFO/semaphore
+				// paths that can exceed the wall window). Reporting work=wall in those cases would
+				// feed a bogus "fully busy" sample and over-boost the scheduler (opposite of the
+				// heat-saver goal); skipping just leaves the app's last good sample in place.
+				if (idle_us >= s_adpf_last_idle)
+				{
+					if (const u64 idle = idle_us - s_adpf_last_idle; idle < wall)
+					{
+						rpcs3::utils::report_frame_work_ns((wall - idle) * 1000);
+					}
+				}
 			}
 			s_adpf_last_now = now_us;
 			s_adpf_last_idle = idle_us;

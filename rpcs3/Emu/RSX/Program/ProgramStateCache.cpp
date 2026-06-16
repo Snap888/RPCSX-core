@@ -663,6 +663,13 @@ fragment_program_utils::fragment_program_metadata fragment_program_utils::analys
 					// Bits 16-23 are swapped into the upper 8 bits (24-31)
 					const u32 tex_num = (inst._u32[0] >> 25) & 15;
 					result.referenced_textures_mask |= (1 << tex_num);
+					// exp_tex (_bx2 modifier): OPDEST struct bit 21, which the fp encoding's
+					// byte2<->byte3 swap puts at raw bit 29 (same swap that puts tex_num at 25
+					// and opcode at 16). Mirrors upstream's d0.exp_tex.
+					if ((inst._u32[0] >> 29) & 1)
+					{
+						result.bx2_texture_reads_mask |= (1u << tex_num);
+					}
 					break;
 				}
 				case RSX_FP_OPCODE_PK4:
