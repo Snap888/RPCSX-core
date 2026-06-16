@@ -2333,6 +2333,31 @@ namespace rsx
 					default:
 						rsx_log.error("Depth texture bound to pipeline with unexpected format 0x%X", format);
 					}
+
+					// 0.0.41 cyclic-zeta early-Z escape: when this depth texture is the active
+					// zeta target sampled back (a genuine depth feedback loop), force the shader
+					// off early-Z so it reads the pre-draw depth. Raises DISABLE_EARLY_Z, which the
+					// consumer (VKFragmentProgram::insertMainEnd) turns into a gl_FragDepth write.
+					// Skipped when the shader already exports depth / discards / runs depth-compare
+					// emulation (those force late-Z anyway).
+					//
+					// Reconciliation vs upstream: we deliberately do NOT also set
+					// rsx::zeta_address_is_cyclic here. In this fork the cyclic texture barrier is
+					// issued from VKDraw's own bind-time is_cyclic_reference detection (load_texture_env),
+					// and the zeta_address_is_cyclic graphics-state bit is owned by
+					// analyse_current_rsx_pipeline for depth-compare-EQUAL feedback-loop teardown
+					// (its now_cyclic is gated on EMULATE_DEPTH_COMPARE). Setting it for the general
+					// case would make analyse clear it the next draw and spuriously raise
+					// zeta_address_cyclic_barrier every frame. Only the shader ctrl bit was missing.
+					if (sampler_descriptors[i]->is_cyclic_reference &&
+						m_framebuffer_layout.zeta_address != 0 &&
+						m_framebuffer_layout.zeta_write_enabled &&
+						!g_cfg.video.strict_rendering_mode &&
+						g_cfg.video.shader_precision != gpu_preset_level::low &&
+						!(current_fragment_program.ctrl & (CELL_GCM_SHADER_CONTROL_DEPTH_EXPORT | RSX_SHADER_CONTROL_META_USES_DISCARD | RSX_SHADER_CONTROL_EMULATE_DEPTH_COMPARE)))
+					{
+						current_fragment_program.ctrl |= RSX_SHADER_CONTROL_DISABLE_EARLY_Z;
+					}
 				}
 				else if (!backend_config.supports_hw_renormalization /* &&
 				    tex.min_filter() == rsx::texture_minify_filter::nearest &&
