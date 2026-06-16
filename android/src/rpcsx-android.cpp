@@ -1916,6 +1916,24 @@ extern "C" bool _rpcsx_initialize(std::string_view rootDir,
                                         stats.avail_free / 4);
   }
 
+  // Release logging budget: a handful of high-volume HLE / recompiler channels emit
+  // thousands of per-call / per-block trace lines (SPU block dumps + loop analysis,
+  // sys_* syscall traces, module export/import dumps, unavailable-perf-counter spam)
+  // that bloat the on-device log enormously with no end-user value - one session was
+  // ~29 MB / 194k lines. Raise those channels so only genuine warnings/errors survive.
+  // g_cfg.log is empty by default, so Emu boot's set_channel_levels() is a no-op and
+  // will not undo these. RSX is kept at warning to preserve the texture cache-miss
+  // perf signal (and the temporary [seethru] diagnostic, which is dedup'd).
+  logs::set_level("SPU", logs::level::error);
+  logs::set_level("sys_fs", logs::level::error);
+  logs::set_level("sys_event", logs::level::error);
+  logs::set_level("sys_spu", logs::level::error);
+  logs::set_level("sys_process", logs::level::error);
+  logs::set_level("sys_net", logs::level::error);
+  logs::set_level("ppu_loader", logs::level::warning);
+  logs::set_level("PERF", logs::level::warning);
+  logs::set_level("RSX", logs::level::warning);
+
   logs::stored_message ver{rpcsx_android.always()};
   // The user-facing name is the ordered date-time (see Version::toString); keep
   // the exact git revision here in the log so a report still pins the commit.
