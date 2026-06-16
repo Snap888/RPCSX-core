@@ -2365,112 +2365,20 @@ namespace rsx
 					}
 				}
 
-				if (rsx::is_int8_remapped_format(format))
+				if (const auto format_ex = tex.format_ex(); format_ex.features != 0)
 				{
-					// Special operations applied to 8-bit formats such as gamma correction and sign conversion
-					// NOTE: The unsigned_remap=bias flag being set flags the texture as being compressed normal (2n-1 / BX2) (UE3)
-					// NOTE: The ARGB8_signed flag means to reinterpret the raw bytes as signed. This is different than unsigned_remap=bias which does range decompression.
-					// This is a separate method of setting the format to signed mode without doing so per-channel
-					// Precedence = SNORM > GAMMA > UNSIGNED_REMAP (See Resistance 3 for GAMMA/BX2 relationship, UE3 for BX2 effect)
+					// 0.0.41 unified texel format conversion (fragment_texture::format_ex):
+					// per-channel SEXT/EXPAND/GAMMA gated by the format's features and projected
+					// through the proper channel-remap shuffle, plus the FF_ feature bits that
+					// select 16-bit-precision math in the shader. Replaces the old hand-rolled
+					// INT8 remap lambda + the non-INT8 stopgap with the exact upstream path for
+					// every format (INT8 RGB + X16/Y16_X16/depth/HILO). Precedence SNORM>GAMMA>BX2.
+					texture_control |= format_ex.texel_remap_control;
+					texture_control |= format_ex.features << texture_control_bits::FORMAT_FEATURES_OFFSET;
 
-					const u32 argb8_signed = tex.argb_signed();                                                                                         // _SNROM
-					const u32 gamma = tex.gamma() & ~argb8_signed;                                                                                      // _SRGB
-					const u32 unsigned_remap = (tex.unsigned_remap() == CELL_GCM_TEXTURE_UNSIGNED_REMAP_NORMAL) ? 0u : (~(gamma | argb8_signed) & 0xF); // _BX2
-					u32 argb8_convert = gamma;
-
-					// The options are mutually exclusive
-					ensure((argb8_signed & gamma) == 0);
-					ensure((argb8_signed & unsigned_remap) == 0);
-					ensure((gamma & unsigned_remap) == 0);
-
-					// Helper function to apply a per-channel mask based on an input mask
-					const auto apply_sign_convert_mask = [&](u32 mask, u32 bit_offset)
-					{
-						// TODO: Use actual remap mask to account for 0 and 1 overrides in default mapping
-						// TODO: Replace this clusterfuck of texture control with matrix transformation
-						const auto remap_ctrl = (tex.remap() >> 8) & 0xAA;
-						if (remap_ctrl == 0xAA)
-						{
-							argb8_convert |= (mask & 0xFu) << bit_offset;
-							return;
-						}
-
-						if ((remap_ctrl & 0x03) == 0x02)
-							argb8_convert |= (mask & 0x1u) << bit_offset;
-						if ((remap_ctrl & 0x0C) == 0x08)
-							argb8_convert |= (mask & 0x2u) << bit_offset;
-						if ((remap_ctrl & 0x30) == 0x20)
-							argb8_convert |= (mask & 0x4u) << bit_offset;
-						if ((remap_ctrl & 0xC0) == 0x80)
-							argb8_convert |= (mask & 0x8u) << bit_offset;
-					};
-
-					if (argb8_signed)
-					{
-						// Apply integer sign extension from uint8 to sint8 and renormalize
-						apply_sign_convert_mask(argb8_signed, texture_control_bits::SEXT_OFFSET);
-					}
-
-					if (unsigned_remap)
-					{
-						// Apply sign expansion, compressed normal-map style (2n - 1)
-						apply_sign_convert_mask(unsigned_remap, texture_control_bits::EXPAND_OFFSET);
-					}
-
-					texture_control |= argb8_convert;
-
-					// See the RENORMALIZE note above: raise the format-convert ctrl bit so
-					// the gated sext/gamma/BX2 texel conversion is actually emitted. Covers
-					// signed/gamma/BX2 8-bit-remapped formats that don't hit RENORMALIZE.
-					if (argb8_convert)
-					{
-						current_fragment_program.ctrl |= RSX_SHADER_CONTROL_TEXTURE_FORMAT_CONVERT;
-					}
-				}
-				else if (const u32 ff = rsx::get_format_features(format); ff != 0)
-				{
-					// Non-INT8 formats with texel features (X16 / Y16_X16 / depth-as-texture
-					// / HILO8) - previously got NO conversion (sampled raw). GAMMA is excluded
-					// by get_format_features for these (it hangs the HW), so only SIGNED (SEXT)
-					// and BIASED (BX2 EXPAND) contribute the per-channel conversion; the FF_
-					// bits select 16-bit-precision math in the conversion shader. The validated
-					// INT8 path above is untouched, and these formats are mutually exclusive
-					// with it, so there is no double-apply.
-					const u32 argb8_signed = (ff & rsx::RSX_FORMAT_FEATURE_SIGNED_COMPONENTS) ? tex.argb_signed() : 0u;
-					const u32 unsigned_remap = ((ff & rsx::RSX_FORMAT_FEATURE_BIASED_NORMALIZATION) &&
-						tex.unsigned_remap() != CELL_GCM_TEXTURE_UNSIGNED_REMAP_NORMAL) ? (~argb8_signed & 0xFu) : 0u;
-					u32 convert = 0;
-
-					const auto apply_mask = [&](u32 mask, u32 bit_offset)
-					{
-						const auto remap_ctrl = (tex.remap() >> 8) & 0xAA;
-						if (remap_ctrl == 0xAA)
-						{
-							convert |= (mask & 0xFu) << bit_offset;
-							return;
-						}
-						if ((remap_ctrl & 0x03) == 0x02) convert |= (mask & 0x1u) << bit_offset;
-						if ((remap_ctrl & 0x0C) == 0x08) convert |= (mask & 0x2u) << bit_offset;
-						if ((remap_ctrl & 0x30) == 0x20) convert |= (mask & 0x4u) << bit_offset;
-						if ((remap_ctrl & 0xC0) == 0x80) convert |= (mask & 0x8u) << bit_offset;
-					};
-
-					if (argb8_signed)
-					{
-						apply_mask(argb8_signed, texture_control_bits::SEXT_OFFSET);
-					}
-					if (unsigned_remap)
-					{
-						apply_mask(unsigned_remap, texture_control_bits::EXPAND_OFFSET);
-					}
-
-					// Document the format features (drives 16-bit-precision math in the shader).
-					convert |= ff << texture_control_bits::FORMAT_FEATURES_OFFSET;
-					texture_control |= convert;
-
-					// Only raise the format-convert path when an actual per-channel conversion
-					// (SEXT/EXPAND) is active - the FF_ bits alone are inert in the shader.
-					if (convert & ~(0xFu << texture_control_bits::FORMAT_FEATURES_OFFSET))
+					// Raise the format-convert path only when a real per-channel conversion is
+					// requested (the FF_ feature bits alone are inert in _process_texel).
+					if (format_ex.texel_remap_control)
 					{
 						current_fragment_program.ctrl |= RSX_SHADER_CONTROL_TEXTURE_FORMAT_CONVERT;
 					}

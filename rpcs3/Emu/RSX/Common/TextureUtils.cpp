@@ -1227,30 +1227,7 @@ namespace rsx
 		fmt::throw_exception("Unknown format 0x%x", texture_format);
 	}
 
-	bool is_int8_remapped_format(u32 format)
-	{
-		switch (format)
-		{
-		case CELL_GCM_TEXTURE_DEPTH24_D8:
-		case CELL_GCM_TEXTURE_DEPTH24_D8_FLOAT:
-		case CELL_GCM_TEXTURE_DEPTH16:
-		case CELL_GCM_TEXTURE_DEPTH16_FLOAT:
-		case CELL_GCM_TEXTURE_X16:
-		case CELL_GCM_TEXTURE_Y16_X16:
-		case CELL_GCM_TEXTURE_COMPRESSED_HILO8:
-		case CELL_GCM_TEXTURE_COMPRESSED_HILO_S8:
-		case CELL_GCM_TEXTURE_W16_Z16_Y16_X16_FLOAT:
-		case CELL_GCM_TEXTURE_W32_Z32_Y32_X32_FLOAT:
-		case CELL_GCM_TEXTURE_X32_FLOAT:
-		case CELL_GCM_TEXTURE_Y16_X16_FLOAT:
-			// NOTE: Special data formats (XY, HILO, DEPTH) are not RGB formats
-			return false;
-		default:
-			return true;
-		}
-	}
-
-	flags32_t get_format_features(u32 texture_format)
+	u32 get_format_features(u32 texture_format)
 	{
 		// Mirrors upstream rsx::get_format_features. Drives texel conversion for the
 		// non-INT8 formats (the ones is_int8_remapped_format returns false for).

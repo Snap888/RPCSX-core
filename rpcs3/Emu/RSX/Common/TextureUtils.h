@@ -258,7 +258,6 @@ namespace rsx
 	u8 get_format_sample_count(rsx::surface_antialiasing antialias);
 	u32 get_max_depth_value(rsx::surface_depth_format2 format);
 	bool is_depth_stencil_format(rsx::surface_depth_format2 format);
-	bool is_int8_remapped_format(u32 format); // Returns true if the format is treated as INT8 by the RSX remapper.
 
 	// Per-format texel-conversion feature flags (bit order matches texture_control_bits
 	// FF_*: SIGNED, BIASED_RENORM, GAMMA, 16BIT - so the result can be shifted by
@@ -273,7 +272,7 @@ namespace rsx
 		RSX_FORMAT_FEATURE_16BIT_CHANNELS       = (1 << 3),
 	};
 
-	flags32_t get_format_features(u32 texture_format);
+	u32 get_format_features(u32 texture_format);
 
 	/**
 	 * Returns number of texel rows encoded in one pitch-length line of bytes

@@ -108,6 +108,45 @@ namespace rsx
 			result.encoded = encoding;
 			return result;
 		}
+
+		// Project a per-input-channel bitmask through the remap onto the output channels:
+		// output channel C is set iff it REMAPs an input channel that is set in `bits`.
+		// Used by texture_format_ex to apply SEXT/EXPAND only to the channels actually
+		// sampled. Mirrors upstream texture_channel_remap_t::shuffle_mask_bits.
+		u32 shuffle_mask_bits(u32 bits) const
+		{
+			if (!bits || encoded == RSX_TEXTURE_REMAP_IDENTITY) [[likely]]
+			{
+				return bits;
+			}
+
+			u32 result = 0;
+			for (u8 channel = 0; channel < 4; ++channel)
+			{
+				if (control_map[channel] != CELL_GCM_TEXTURE_REMAP_REMAP ||
+					(bits & (1u << channel_map[channel])) == 0)
+				{
+					continue;
+				}
+				result |= (1u << channel);
+			}
+			return result;
+		}
+	};
+
+	// Per-texture format conversion descriptor (mirrors upstream rsx::texture_format_ex).
+	// features = the format's RSX_FORMAT_FEATURE_* bits; texel_remap_control = the packed
+	// SEXT/EXPAND/GAMMA channel bits to OR into texture_control. Computed by
+	// fragment_texture::format_ex() and consumed in get_current_fragment_program.
+	struct texture_format_ex
+	{
+		texture_format_ex() = default;
+		texture_format_ex(u32 bits) : format_bits(bits) {}
+
+		u32 format_bits = 0;
+		u32 features = 0;
+		u32 encoded_remap = 0;
+		u32 texel_remap_control = 0;
 	};
 
 	static const texture_channel_remap_t default_remap_vector =
