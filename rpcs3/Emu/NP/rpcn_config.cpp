@@ -30,7 +30,7 @@ void cfg_rpcn::load()
 	}
 }
 
-void cfg_rpcn::save()
+void cfg_rpcn::save() const
 {
 #ifdef _WIN32
 	const std::string path_to_cfg = fs::get_config_dir(true);
@@ -42,25 +42,10 @@ void cfg_rpcn::save()
 
 	const std::string path = cfg_rpcn::get_path();
 
-	// SECURITY: never persist the derived password or login token to rpcn.yml. On
-	// Android that file lives on app-external storage (MTP / adb-backup readable). The
-	// app keeps these secrets in Keystore-backed EncryptedSharedPreferences and
-	// re-injects them at runtime (see _rpcsx_rpcnSetDerivedCredentials). Blank them for
-	// serialization regardless of which caller triggered the save (set_host, add_host,
-	// get_npid auto-save, etc.), then restore the in-memory values so the live session
-	// keeps working unchanged.
-	const std::string live_password = password.to_string();
-	const std::string live_token = token.to_string();
-	password.from_string("");
-	token.from_string("");
-
 	if (!cfg::node::save(path))
 	{
 		rpcn_log.error("Could not save config: %s (error=%s)", path, fs::g_tls_error);
 	}
-
-	password.from_string(live_password);
-	token.from_string(live_token);
 }
 
 std::string cfg_rpcn::get_path()
