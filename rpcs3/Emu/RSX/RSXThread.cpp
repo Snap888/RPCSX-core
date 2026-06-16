@@ -2017,9 +2017,76 @@ namespace rsx
 		}
 	}
 
+	rsx::flags32_t thread::get_fragment_program_export_config()
+	{
+		// Draw-state-driven depth-compare / multisampled-zbuffer export bits. Gated by
+		// the config option (default off): enabling it makes the VK backend bind the live
+		// zeta surface as frag_depth (with a feedback-loop barrier) so the ROP-epilogue
+		// can emulate depth_func==EQUAL. Without the backend bind this would read an
+		// unbound sampler, so the producer stays inert unless the user opts in.
+		if (!g_cfg.video.emulate_depth_compare) [[likely]]
+		{
+			return 0;
+		}
+
+		if (method_registers.current_draw_clause.classify_mode() != primitive_class::polygon)
+		{
+			return 0;
+		}
+
+		u32 expected_ctrl = 0;
+
+		if (m_framebuffer_layout.zeta_address &&
+			m_ctx->register_state->depth_test_enabled() &&
+			m_ctx->register_state->depth_func() == rsx::comparison_function::equal)
+		{
+			expected_ctrl |= RSX_SHADER_CONTROL_EMULATE_DEPTH_COMPARE;
+
+			if (backend_config.supports_hw_msaa &&
+				m_ctx->register_state->surface_antialias() != rsx::surface_antialiasing::center_1_sample)
+			{
+				expected_ctrl |= RSX_SHADER_CONTROL_MULTISAMPLED_ZBUFFER;
+			}
+		}
+
+		return expected_ctrl;
+	}
+
 	void thread::analyse_current_rsx_pipeline()
 	{
 		m_program_cache_hint.invalidate(m_graphics_state.load());
+
+		// Keep the fragment export bits in sync with draw state even when the FS ucode is
+		// cached: depth_func/zeta/msaa can toggle without a ucode edit. If the export config
+		// changed, update the consumer ctrl bits and force a pipeline reload. Inert unless
+		// emulate_depth_compare is enabled (the helper returns 0).
+		constexpr u32 fs_export_config_mask = (RSX_SHADER_CONTROL_EMULATE_DEPTH_COMPARE | RSX_SHADER_CONTROL_MULTISAMPLED_ZBUFFER);
+		const u32 export_ctrl = get_fragment_program_export_config();
+		if ((current_fragment_program.ctrl & fs_export_config_mask) != export_ctrl)
+		{
+			current_fragment_program.ctrl &= ~fs_export_config_mask;
+			current_fragment_program.ctrl |= export_ctrl;
+
+			m_graphics_state |= rsx::pipeline_state::fragment_program_state_dirty;
+		}
+
+		// Track the cyclic zeta state (depth feedback loop) so the backend can END the
+		// loop - restore the plain depth-attachment layout - on the first draw after
+		// depth-compare stops. Runs every draw (analyse is not gated by ucode-dirty).
+		const bool now_cyclic = (export_ctrl & RSX_SHADER_CONTROL_EMULATE_DEPTH_COMPARE) != 0;
+		const bool was_cyclic = m_graphics_state.test(rsx::zeta_address_is_cyclic);
+		if (now_cyclic)
+		{
+			m_graphics_state |= rsx::zeta_address_is_cyclic;
+		}
+		else
+		{
+			m_graphics_state.clear(rsx::zeta_address_is_cyclic);
+		}
+		if (was_cyclic && !now_cyclic)
+		{
+			m_graphics_state |= rsx::zeta_address_cyclic_barrier;
+		}
 
 		prefetch_vertex_program();
 		prefetch_fragment_program();
@@ -2115,6 +2182,10 @@ namespace rsx
 					current_fragment_program.ctrl |= RSX_SHADER_CONTROL_ALPHA_TO_COVERAGE;
 				}
 			}
+
+			// Depth-compare / multisampled-zbuffer export bits (inert unless
+			// emulate_depth_compare is enabled; the helper returns 0 otherwise).
+			current_fragment_program.ctrl |= get_fragment_program_export_config();
 		}
 		else if (method_registers.point_sprite_enabled() &&
 				 method_registers.current_draw_clause.primitive == primitive_type::points)
@@ -3357,7 +3428,12 @@ namespace rsx
 				const u64 wall = now_us - s_adpf_last_now;
 				const u64 idle = idle_us > s_adpf_last_idle ? idle_us - s_adpf_last_idle : 0;
 				const u64 work = wall > idle ? wall - idle : wall;
+				// work = the CPU busy time the scheduler should run fast enough to finish;
+				// period = the flip-to-flip deadline (e.g. ~33.3ms when 30fps-locked). The
+				// app uses period as the ADPF target so a 30fps game is not treated as
+				// over-budget against a fixed 60fps target (which would over-boost = more heat).
 				rpcs3::utils::report_frame_work_ns(work * 1000);
+				rpcs3::utils::report_frame_period_ns(wall * 1000);
 			}
 			s_adpf_last_now = now_us;
 			s_adpf_last_idle = idle_us;

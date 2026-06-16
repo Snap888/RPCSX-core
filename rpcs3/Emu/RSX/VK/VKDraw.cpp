@@ -487,6 +487,19 @@ void VKGSRender::load_texture_env()
 
 	m_samplers_dirty.store(false);
 
+	if (current_fragment_program.ctrl & RSX_SHADER_CONTROL_EMULATE_DEPTH_COMPARE)
+	{
+		// Depth-compare emulation samples the bound zeta while it stays the depth
+		// attachment: transition it into the self-referencing feedback-loop layout and
+		// force the renderpass into a cyclic-capable form. The matching layout restore
+		// happens in end() once depth-compare stops (zeta_address_cyclic_barrier).
+		if (auto ds = std::get<1>(m_rtts.m_bound_depth_stencil))
+		{
+			ds->texture_barrier(*m_current_command_buffer);
+			check_for_cyclic_refs = true;
+		}
+	}
+
 	if (check_for_cyclic_refs)
 	{
 		// Regenerate renderpass key
@@ -645,6 +658,22 @@ bool VKGSRender::bind_texture_env()
 			i,
 			::glsl::program_domain::glsl_vertex_program,
 			m_current_frame->descriptor_set);
+	}
+
+	if (current_fragment_program.ctrl & RSX_SHADER_CONTROL_EMULATE_DEPTH_COMPARE)
+	{
+		// Bind the live zeta surface as frag_depth so the ROP epilogue can self-compare
+		// depth (depth_func==EQUAL emulation). texelFetch needs no sampler state, so a
+		// null sampler is used. The feedback-loop layout transition is done in
+		// load_texture_env via texture_barrier.
+		if (auto ds = std::get<1>(m_rtts.m_bound_depth_stencil))
+		{
+			auto view = ds->get_view(rsx::default_remap_vector, VK_IMAGE_ASPECT_DEPTH_BIT);
+			m_program->bind_uniform({vk::null_sampler(), view->value, view->image()->current_layout},
+				"frag_depth",
+				VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+				m_current_frame->descriptor_set);
+		}
 	}
 
 	return out_of_memory;
@@ -1062,7 +1091,25 @@ void VKGSRender::end()
 	if (auto ds = std::get<1>(m_rtts.m_bound_depth_stencil))
 	{
 		ds->write_barrier(*m_current_command_buffer);
+
+		if (m_graphics_state.test(rsx::zeta_address_cyclic_barrier) &&
+			ds->current_layout != VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+		{
+			// End the depth feedback loop: restore the plain attachment layout so the
+			// following draws get early-Z and don't read stale feedback values (flicker).
+			ds->change_layout(*m_current_command_buffer, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+			ds->reset_surface_counters();
+
+			if (const auto key = vk::get_renderpass_key(m_fbo_images, m_current_renderpass_key);
+				key != m_current_renderpass_key)
+			{
+				m_current_renderpass_key = key;
+				m_cached_renderpass = VK_NULL_HANDLE;
+			}
+		}
 	}
+
+	m_graphics_state.clear(rsx::zeta_address_cyclic_barrier);
 
 	for (auto& rtt : m_rtts.m_bound_render_targets)
 	{

@@ -99,6 +99,18 @@ namespace rpcs3::utils
 		return g_frame_work_ns.load(std::memory_order_relaxed);
 	}
 
+	static std::atomic<u64> g_frame_period_ns{0};
+
+	void report_frame_period_ns(u64 ns)
+	{
+		g_frame_period_ns.store(ns, std::memory_order_relaxed);
+	}
+
+	u64 get_frame_period_ns()
+	{
+		return g_frame_period_ns.load(std::memory_order_relaxed);
+	}
+
 	bool low_power_wait_enabled()
 	{
 		return g_power_save_mode.load(std::memory_order_relaxed) || rx::wfe_enabled();

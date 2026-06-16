@@ -3267,6 +3267,10 @@ extern "C" long long _rpcsx_getFrameWorkNanos() {
   return static_cast<long long>(rpcs3::utils::get_frame_work_ns());
 }
 
+extern "C" long long _rpcsx_getFramePeriodNanos() {
+  return static_cast<long long>(rpcs3::utils::get_frame_period_ns());
+}
+
 // Android experimental: bias PPU/SPU/RSX onto the big CPU cluster.
 extern "C" void _rpcsx_setCpuAffinityMode(int on) {
   thread_ctrl::set_android_affinity(on != 0);

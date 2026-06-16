@@ -62,6 +62,8 @@ namespace rpcs3::utils
 	int get_rsx_thread_tid();
 	void report_frame_work_ns(u64 ns);
 	u64 get_frame_work_ns();
+	void report_frame_period_ns(u64 ns);
+	u64 get_frame_period_ns();
 
 	// True when low-power waiting should be used at idle spin sites: either the
 	// battery-saver override is on, or the experimental WFE toggle is on. Lets the

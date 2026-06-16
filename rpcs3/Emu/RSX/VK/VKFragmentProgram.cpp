@@ -155,6 +155,25 @@ void VKFragmentDecompilerThread::insertConstants(std::stringstream& OS)
 		}
 	}
 
+	if (m_prog.ctrl & RSX_SHADER_CONTROL_EMULATE_DEPTH_COMPARE)
+	{
+		// Depth-compare emulation samples the live zeta surface via frag_depth (bound by
+		// VKGSRender::bind_texture_env). Declare it in the same set=0 fragment-sampler
+		// region using the next free slot, mirroring the regular sampler emission above.
+		const auto frag_depth_type = (m_prog.ctrl & RSX_SHADER_CONTROL_MULTISAMPLED_ZBUFFER)
+			? "sampler2DMS"
+			: "sampler2D";
+
+		vk::glsl::program_input in;
+		in.location = location;
+		in.domain = ::glsl::glsl_fragment_program;
+		in.name = "frag_depth";
+		in.type = vk::glsl::input_type_texture;
+		inputs.push_back(in);
+
+		OS << "layout(set=0, binding=" << location++ << ") uniform " << frag_depth_type << " frag_depth;\n";
+	}
+
 	ensure(location <= m_binding_table.vertex_textures_first_bind_slot); // "Too many sampler descriptors!"
 
 	std::string constants_block;

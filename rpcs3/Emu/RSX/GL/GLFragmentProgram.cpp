@@ -153,6 +153,18 @@ void GLFragmentDecompilerThread::insertConstants(std::stringstream& OS)
 		}
 	}
 
+	if (m_prog.ctrl & RSX_SHADER_CONTROL_EMULATE_DEPTH_COMPARE)
+	{
+		// Keep the shared ROP-epilogue GLSL valid: it references frag_depth under
+		// _ENABLE_DEPTH_COMPARE. GL is inert on Android (VK-only at runtime); the bind
+		// side is not wired for GL.
+		const auto frag_depth_type = (m_prog.ctrl & RSX_SHADER_CONTROL_MULTISAMPLED_ZBUFFER)
+			? "sampler2DMS"
+			: "sampler2D";
+
+		OS << "uniform " << frag_depth_type << " frag_depth;\n";
+	}
+
 	OS << "\n";
 
 	std::string constants_block;
