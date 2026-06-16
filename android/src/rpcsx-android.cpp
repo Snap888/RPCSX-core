@@ -3380,6 +3380,29 @@ extern "C" void _rpcsx_rpcnSetCredentials(std::string_view npid,
   g_cfg_rpcn.save();
 }
 
+// Return the stored DERIVED password hash (PBKDF2-SHA3), not the raw password.
+// The app uses this ONCE to migrate an existing rpcn.yml secret into Keystore-backed
+// EncryptedSharedPreferences, and to read back the freshly-derived hash right after
+// _rpcsx_rpcnSetCredentials so it can persist the derived form (never the raw password).
+extern "C" std::string _rpcsx_rpcnGetDerivedPassword() {
+  return g_cfg_rpcn.get_password();
+}
+
+// Inject already-derived credentials into the live config WITHOUT re-deriving. The app
+// calls this on launch with the password hash + token it holds in EncryptedSharedPreferences,
+// so the secrets live only in app secure storage and in memory - cfg_rpcn::save() no longer
+// writes them to rpcn.yml. An empty derived_password keeps the existing in-memory value.
+extern "C" void _rpcsx_rpcnSetDerivedCredentials(std::string_view npid,
+                                                 std::string_view derived_password,
+                                                 std::string_view token) {
+  g_cfg_rpcn.set_npid(npid);
+  if (!derived_password.empty()) {
+    g_cfg_rpcn.set_password(derived_password);
+  }
+  g_cfg_rpcn.set_token(token);
+  g_cfg_rpcn.save();
+}
+
 // Return host list as JSON [{description, host}].
 extern "C" std::string _rpcsx_rpcnGetHosts() {
   g_cfg_rpcn.load();

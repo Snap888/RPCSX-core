@@ -13,7 +13,7 @@ struct cfg_rpcn : cfg::node
 	cfg::_bool ipv6_support{this, "Experimental IPv6 support", false};
 
 	void load();
-	void save() const;
+	void save();
 
 	std::string get_host() const;
 	std::string get_npid(); // not const because it can save if npid is requested and it has never been set
