@@ -222,6 +222,15 @@ vec4 _process_texel(in vec4 rgba, const in uint control_bits)
 		return rgba;
 	}
 
+	// [rpcsx] Preserve the texture's alpha channel through format conversion. The SEXT /
+	// EXPAND / GAMMA decode below targets colour data (signed normal maps, sRGB) and shifts
+	// the channels into snorm / linear space. The game's alpha-test, however, compares the
+	// fragment alpha against alpha_ref in the raw unorm space, so a converted alpha makes
+	// opaque fragments fail the test and characters render see-through (observed on Turnip
+	// once TEXTURE_FORMAT_CONVERT was enabled). Alpha-kill below already reads the raw alpha.
+	// Keep alpha raw; the RGB conversion (which fixes BX2 normal maps) is unaffected.
+	const float _texel_alpha_raw = rgba.a;
+
 #ifdef _ENABLE_TEXTURE_ALPHA_KILL
 	if (_test_bit(control_bits, ALPHAKILL))
 	{
@@ -286,6 +295,9 @@ vec4 _process_texel(in vec4 rgba, const in uint control_bits)
 		rgba = _select(rgba, convert, notEqual(mask, uvec4(0)));
 	}
 
+	// Restore the raw texture alpha (see note above): alpha-test/col0.a must stay in the
+	// unorm space that alpha_ref is compared in.
+	rgba.a = _texel_alpha_raw;
 	return rgba;
 }
 
