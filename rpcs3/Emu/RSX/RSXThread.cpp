@@ -2427,6 +2427,54 @@ namespace rsx
 						current_fragment_program.ctrl |= RSX_SHADER_CONTROL_TEXTURE_FORMAT_CONVERT;
 					}
 				}
+				else if (const u32 ff = rsx::get_format_features(format); ff != 0)
+				{
+					// Non-INT8 formats with texel features (X16 / Y16_X16 / depth-as-texture
+					// / HILO8) - previously got NO conversion (sampled raw). GAMMA is excluded
+					// by get_format_features for these (it hangs the HW), so only SIGNED (SEXT)
+					// and BIASED (BX2 EXPAND) contribute the per-channel conversion; the FF_
+					// bits select 16-bit-precision math in the conversion shader. The validated
+					// INT8 path above is untouched, and these formats are mutually exclusive
+					// with it, so there is no double-apply.
+					const u32 argb8_signed = (ff & rsx::RSX_FORMAT_FEATURE_SIGNED_COMPONENTS) ? tex.argb_signed() : 0u;
+					const u32 unsigned_remap = ((ff & rsx::RSX_FORMAT_FEATURE_BIASED_NORMALIZATION) &&
+						tex.unsigned_remap() != CELL_GCM_TEXTURE_UNSIGNED_REMAP_NORMAL) ? (~argb8_signed & 0xFu) : 0u;
+					u32 convert = 0;
+
+					const auto apply_mask = [&](u32 mask, u32 bit_offset)
+					{
+						const auto remap_ctrl = (tex.remap() >> 8) & 0xAA;
+						if (remap_ctrl == 0xAA)
+						{
+							convert |= (mask & 0xFu) << bit_offset;
+							return;
+						}
+						if ((remap_ctrl & 0x03) == 0x02) convert |= (mask & 0x1u) << bit_offset;
+						if ((remap_ctrl & 0x0C) == 0x08) convert |= (mask & 0x2u) << bit_offset;
+						if ((remap_ctrl & 0x30) == 0x20) convert |= (mask & 0x4u) << bit_offset;
+						if ((remap_ctrl & 0xC0) == 0x80) convert |= (mask & 0x8u) << bit_offset;
+					};
+
+					if (argb8_signed)
+					{
+						apply_mask(argb8_signed, texture_control_bits::SEXT_OFFSET);
+					}
+					if (unsigned_remap)
+					{
+						apply_mask(unsigned_remap, texture_control_bits::EXPAND_OFFSET);
+					}
+
+					// Document the format features (drives 16-bit-precision math in the shader).
+					convert |= ff << texture_control_bits::FORMAT_FEATURES_OFFSET;
+					texture_control |= convert;
+
+					// Only raise the format-convert path when an actual per-channel conversion
+					// (SEXT/EXPAND) is active - the FF_ bits alone are inert in the shader.
+					if (convert & ~(0xFu << texture_control_bits::FORMAT_FEATURES_OFFSET))
+					{
+						current_fragment_program.ctrl |= RSX_SHADER_CONTROL_TEXTURE_FORMAT_CONVERT;
+					}
+				}
 
 				current_fragment_program.texture_params[i].control = texture_control;
 			}

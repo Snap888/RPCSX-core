@@ -1250,6 +1250,63 @@ namespace rsx
 		}
 	}
 
+	flags32_t get_format_features(u32 texture_format)
+	{
+		// Mirrors upstream rsx::get_format_features. Drives texel conversion for the
+		// non-INT8 formats (the ones is_int8_remapped_format returns false for).
+		switch (texture_format)
+		{
+		case CELL_GCM_TEXTURE_B8:
+		case CELL_GCM_TEXTURE_A1R5G5B5:
+		case CELL_GCM_TEXTURE_A4R4G4B4:
+		case CELL_GCM_TEXTURE_R5G6B5:
+		case CELL_GCM_TEXTURE_A8R8G8B8:
+		case CELL_GCM_TEXTURE_COMPRESSED_DXT1:
+		case CELL_GCM_TEXTURE_COMPRESSED_DXT23:
+		case CELL_GCM_TEXTURE_COMPRESSED_DXT45:
+		case CELL_GCM_TEXTURE_G8B8:
+		case CELL_GCM_TEXTURE_COMPRESSED_B8R8_G8R8:
+		case CELL_GCM_TEXTURE_COMPRESSED_R8B8_R8G8:
+		case CELL_GCM_TEXTURE_R6G5B5:
+		case CELL_GCM_TEXTURE_R5G5B5A1:
+		case CELL_GCM_TEXTURE_D1R5G5B5:
+		case CELL_GCM_TEXTURE_D8R8G8B8:
+			// Base texture formats - everything is supported
+			return RSX_FORMAT_FEATURE_SIGNED_COMPONENTS | RSX_FORMAT_FEATURE_GAMMA_CORRECTION | RSX_FORMAT_FEATURE_BIASED_NORMALIZATION;
+
+		case CELL_GCM_TEXTURE_DEPTH24_D8:
+		case CELL_GCM_TEXTURE_DEPTH24_D8_FLOAT:
+		case CELL_GCM_TEXTURE_DEPTH16:
+		case CELL_GCM_TEXTURE_DEPTH16_FLOAT:
+			// Depth textures hang the HW if BX2 or GAMMA is active. UNSIGNED_REMAP=BIASED works.
+			return RSX_FORMAT_FEATURE_BIASED_NORMALIZATION;
+
+		case CELL_GCM_TEXTURE_X16:
+			// X16 - GAMMA causes hangs. UNSIGNED_REMAP=BIASED works.
+			return RSX_FORMAT_FEATURE_BIASED_NORMALIZATION | RSX_FORMAT_FEATURE_16BIT_CHANNELS;
+		case CELL_GCM_TEXTURE_Y16_X16:
+			// X16 | Y16 - GAMMA causes hangs. ARGB8_SIGNED works. UNSIGNED_REMAP=BIASED also works.
+			return RSX_FORMAT_FEATURE_SIGNED_COMPONENTS | RSX_FORMAT_FEATURE_BIASED_NORMALIZATION | RSX_FORMAT_FEATURE_16BIT_CHANNELS;
+
+		case CELL_GCM_TEXTURE_COMPRESSED_HILO8:
+			return RSX_FORMAT_FEATURE_BIASED_NORMALIZATION;
+
+		case CELL_GCM_TEXTURE_COMPRESSED_HILO_S8:
+			return 0;
+
+		case CELL_GCM_TEXTURE_W16_Z16_Y16_X16_FLOAT:
+		case CELL_GCM_TEXTURE_W32_Z32_Y32_X32_FLOAT:
+		case CELL_GCM_TEXTURE_X32_FLOAT:
+		case CELL_GCM_TEXTURE_Y16_X16_FLOAT:
+			// Floating point textures - nothing works.
+			return 0;
+		}
+
+		// Unknown/unlisted formats: no special texel features (degrade gracefully on
+		// Android rather than throwing, since this is the non-INT8 fallback path).
+		return 0;
+	}
+
 	/**
 	 * A texture is stored as an array of blocks, where a block is a pixel for standard texture
 	 * but is a structure containing several pixels for compressed format
