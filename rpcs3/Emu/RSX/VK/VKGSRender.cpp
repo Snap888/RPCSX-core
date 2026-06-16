@@ -604,7 +604,11 @@ VKGSRender::VKGSRender(utils::serial* ar) noexcept : GSRender(ar)
 	else
 		m_vertex_cache = std::make_unique<vk::weak_vertex_cache>();
 
-	m_shaders_cache = std::make_unique<vk::shader_cache>(*m_prog_buffer, "vulkan", "v1.95");
+	// v1.96: bumped to invalidate disk pipeline caches after the texel-conversion
+	// alpha-preservation fix (RSXFragmentTextureOps.glsl) - the decompiler output
+	// changed without a program-hash change, so old cached pipelines would otherwise
+	// serve the pre-fix (alpha-converting) shaders and the see-through fix would not apply.
+	m_shaders_cache = std::make_unique<vk::shader_cache>(*m_prog_buffer, "vulkan", "v1.96");
 
 	for (u32 i = 0; i < m_swapchain->get_swap_image_count(); ++i)
 	{
