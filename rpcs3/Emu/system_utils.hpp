@@ -51,6 +51,18 @@ namespace rpcs3::utils
 	void set_thermal_frame_cap(float fps);
 	float get_thermal_frame_cap();
 
+	// Android ADPF (PerformanceHintManager) feed. The RSX flip loop publishes the
+	// OS thread id of the presenting thread and this frame's actual CPU work time
+	// (wall interval minus idle/limiter sleep). The app polls these to drive a
+	// performance hint session so the scheduler can pick the lowest CPU clock that
+	// still hits the frame target = same fps, less heat. Pure publish: the values
+	// are advisory and read-only to the core, so rendering is unaffected whether or
+	// not the app consumes them. tid 0 / work 0 = not yet known.
+	void set_rsx_thread_tid(int tid);
+	int get_rsx_thread_tid();
+	void report_frame_work_ns(u64 ns);
+	u64 get_frame_work_ns();
+
 	// True when low-power waiting should be used at idle spin sites: either the
 	// battery-saver override is on, or the experimental WFE toggle is on. Lets the
 	// proven WFE/spin-trim wins reach every battery-saver user (the two toggles

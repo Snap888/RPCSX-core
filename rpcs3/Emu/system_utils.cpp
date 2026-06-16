@@ -76,6 +76,29 @@ namespace rpcs3::utils
 		return g_thermal_frame_cap.load(std::memory_order_relaxed);
 	}
 
+	static std::atomic<int> g_rsx_thread_tid{0};
+	static std::atomic<u64> g_frame_work_ns{0};
+
+	void set_rsx_thread_tid(int tid)
+	{
+		g_rsx_thread_tid.store(tid, std::memory_order_relaxed);
+	}
+
+	int get_rsx_thread_tid()
+	{
+		return g_rsx_thread_tid.load(std::memory_order_relaxed);
+	}
+
+	void report_frame_work_ns(u64 ns)
+	{
+		g_frame_work_ns.store(ns, std::memory_order_relaxed);
+	}
+
+	u64 get_frame_work_ns()
+	{
+		return g_frame_work_ns.load(std::memory_order_relaxed);
+	}
+
 	bool low_power_wait_enabled()
 	{
 		return g_power_save_mode.load(std::memory_order_relaxed) || rx::wfe_enabled();

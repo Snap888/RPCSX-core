@@ -3256,6 +3256,17 @@ extern "C" void _rpcsx_setThermalFrameCap(float fps) {
   rpcsx_android.notice("Power: thermal frame cap %.0f fps", fps);
 }
 
+// Android ADPF feed (read side): the presenting RSX thread's OS tid (0 until the
+// RSX thread has flipped once) and this frame's actual CPU work in nanoseconds.
+// The app polls these to drive a PerformanceHintManager session. Advisory only.
+extern "C" int _rpcsx_getRsxThreadTid() {
+  return rpcs3::utils::get_rsx_thread_tid();
+}
+
+extern "C" long long _rpcsx_getFrameWorkNanos() {
+  return static_cast<long long>(rpcs3::utils::get_frame_work_ns());
+}
+
 // Android experimental: bias PPU/SPU/RSX onto the big CPU cluster.
 extern "C" void _rpcsx_setCpuAffinityMode(int on) {
   thread_ctrl::set_android_affinity(on != 0);

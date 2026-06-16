@@ -35,6 +35,10 @@
 #include <thread>
 #include <unordered_set>
 
+#ifdef __ANDROID__
+#include <unistd.h> // ::gettid() for the ADPF performance-hint feed
+#endif
+
 class GSRender;
 
 #define CMD_DEBUG 0
@@ -3325,6 +3329,40 @@ namespace rsx
 			on_frame_end(buffer, true);
 			ensure(m_queued_flip.pop(buffer));
 		}
+
+#ifdef __ANDROID__
+		// ADPF feed: publish this frame's actual CPU work (wall interval minus the
+		// idle/limiter sleep) and the presenting thread's OS tid so the app can drive
+		// Android's PerformanceHintManager. Measured at a fixed per-iteration point,
+		// so the previous iteration's frame-limiter sleep is captured in the idle
+		// delta and excluded. Advisory only - stored to atomics nobody in the core
+		// reads back, so this changes no rendering behavior. Cost is a subtraction
+		// plus a relaxed store per flip.
+		{
+			static thread_local u64 s_adpf_last_now = 0;
+			static thread_local u64 s_adpf_last_idle = 0;
+			static thread_local int s_adpf_tid = 0;
+			if (s_adpf_tid == 0)
+			{
+				s_adpf_tid = static_cast<int>(::gettid());
+			}
+			// Republish every flip (cheap relaxed store) so a recreated RSX thread
+			// overwrites a stale tid instead of leaving the app's hint session
+			// pointed at a dead thread after a restart.
+			rpcs3::utils::set_rsx_thread_tid(s_adpf_tid);
+			const u64 now_us = get_system_time();
+			const u64 idle_us = performance_counters.idle_time.load();
+			if (s_adpf_last_now != 0 && now_us > s_adpf_last_now)
+			{
+				const u64 wall = now_us - s_adpf_last_now;
+				const u64 idle = idle_us > s_adpf_last_idle ? idle_us - s_adpf_last_idle : 0;
+				const u64 work = wall > idle ? wall - idle : wall;
+				rpcs3::utils::report_frame_work_ns(work * 1000);
+			}
+			s_adpf_last_now = now_us;
+			s_adpf_last_idle = idle_us;
+		}
+#endif
 
 		double limit = 0.;
 		const auto frame_limit = g_disable_frame_limit ? frame_limit_type::none : g_cfg.video.frame_limit;
