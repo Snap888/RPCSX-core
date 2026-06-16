@@ -281,11 +281,6 @@ namespace rsx
 		// Prefetch and analyze the currently active fragment program ucode
 		void prefetch_fragment_program();
 
-		// Draw-state-driven fragment shader export bits (depth-compare / multisampled-
-		// zbuffer emulation). Gated by g_cfg.video.emulate_depth_compare (default off);
-		// the VK backend binds frag_depth + a feedback barrier when these bits are set.
-		flags32_t get_fragment_program_export_config();
-
 		// Prefetch and analyze the currently active vertex program ucode
 		void prefetch_vertex_program();
 

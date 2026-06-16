@@ -2,7 +2,6 @@
 #include "RSXTexture.h"
 
 #include "rsx_utils.h"
-#include "Common/TextureUtils.h"
 
 #include "Emu/system_config.h"
 
@@ -258,61 +257,6 @@ namespace rsx
 	u8 fragment_texture::argb_signed() const
 	{
 		return ((registers[NV4097_SET_TEXTURE_FILTER + (m_index * 8)] >> 28) & 0xf);
-	}
-
-	rsx::texture_format_ex fragment_texture::format_ex() const
-	{
-		// Mirrors upstream fragment_texture::format_ex(). Computes the per-channel texel
-		// conversion (SEXT/EXPAND/GAMMA) gated by the format's features, so the right
-		// channels are converted at the right precision. Precedence SNORM > GAMMA > BX2.
-		const auto format_bits = format();
-		const auto base_format = format_bits & ~(CELL_GCM_TEXTURE_UN | CELL_GCM_TEXTURE_LN);
-		const auto format_features = rsx::get_format_features(base_format);
-		if (format_features == 0)
-		{
-			return { format_bits };
-		}
-
-		u32 argb_signed_ = 0;
-		u32 unsigned_remap_ = 0;
-		u32 gamma_ = 0;
-
-		if (format_features & rsx::RSX_FORMAT_FEATURE_SIGNED_COMPONENTS)
-		{
-			// Applied pre-readout - a property of the incoming bytes, so it is remapped.
-			argb_signed_ = decoded_remap().shuffle_mask_bits(argb_signed());
-		}
-
-		if (format_features & rsx::RSX_FORMAT_FEATURE_GAMMA_CORRECTION)
-		{
-			// Applied post-readout, not remapped.
-			gamma_ = gamma() & ~(argb_signed_);
-		}
-
-		if (format_features & rsx::RSX_FORMAT_FEATURE_BIASED_NORMALIZATION)
-		{
-			// Compressed-normal (2n-1 / BX2) decompression on all channels; subject to remap.
-			if (unsigned_remap() == CELL_GCM_TEXTURE_UNSIGNED_REMAP_BIASED)
-			{
-				unsigned_remap_ = decoded_remap().shuffle_mask_bits(0xFu) & ~(argb_signed_ | gamma_);
-			}
-		}
-
-		u32 format_convert = gamma_;
-
-		// The options are mutually exclusive.
-		ensure((argb_signed_ & gamma_) == 0);
-		ensure((argb_signed_ & unsigned_remap_) == 0);
-		ensure((gamma_ & unsigned_remap_) == 0);
-
-		format_convert |= (argb_signed_ << texture_control_bits::SEXT_OFFSET);
-		format_convert |= (unsigned_remap_ << texture_control_bits::EXPAND_OFFSET);
-
-		texture_format_ex result{format_bits};
-		result.features = format_features;
-		result.texel_remap_control = format_convert;
-		result.encoded_remap = remap();
-		return result;
 	}
 
 	bool fragment_texture::a_signed() const

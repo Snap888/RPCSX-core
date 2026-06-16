@@ -66,9 +66,6 @@ namespace rsx
 		rsx::texture_magnify_filter mag_filter() const;
 		u8 convolution_filter() const;
 		u8 argb_signed() const;
-		// Computes the texel format-conversion descriptor (features + SEXT/EXPAND/GAMMA
-		// remap control) for this texture. Mirrors upstream fragment_texture::format_ex.
-		rsx::texture_format_ex format_ex() const;
 		bool a_signed() const;
 		bool r_signed() const;
 		bool g_signed() const;

@@ -35,10 +35,6 @@
 #include <thread>
 #include <unordered_set>
 
-#ifdef __ANDROID__
-#include <unistd.h> // ::gettid() for the ADPF performance-hint feed
-#endif
-
 class GSRender;
 
 #define CMD_DEBUG 0
@@ -2017,76 +2013,9 @@ namespace rsx
 		}
 	}
 
-	rsx::flags32_t thread::get_fragment_program_export_config()
-	{
-		// Draw-state-driven depth-compare / multisampled-zbuffer export bits. Gated by
-		// the config option (default off): enabling it makes the VK backend bind the live
-		// zeta surface as frag_depth (with a feedback-loop barrier) so the ROP-epilogue
-		// can emulate depth_func==EQUAL. Without the backend bind this would read an
-		// unbound sampler, so the producer stays inert unless the user opts in.
-		if (!g_cfg.video.emulate_depth_compare) [[likely]]
-		{
-			return 0;
-		}
-
-		if (method_registers.current_draw_clause.classify_mode() != primitive_class::polygon)
-		{
-			return 0;
-		}
-
-		u32 expected_ctrl = 0;
-
-		if (m_framebuffer_layout.zeta_address &&
-			m_ctx->register_state->depth_test_enabled() &&
-			m_ctx->register_state->depth_func() == rsx::comparison_function::equal)
-		{
-			expected_ctrl |= RSX_SHADER_CONTROL_EMULATE_DEPTH_COMPARE;
-
-			if (backend_config.supports_hw_msaa &&
-				m_ctx->register_state->surface_antialias() != rsx::surface_antialiasing::center_1_sample)
-			{
-				expected_ctrl |= RSX_SHADER_CONTROL_MULTISAMPLED_ZBUFFER;
-			}
-		}
-
-		return expected_ctrl;
-	}
-
 	void thread::analyse_current_rsx_pipeline()
 	{
 		m_program_cache_hint.invalidate(m_graphics_state.load());
-
-		// Keep the fragment export bits in sync with draw state even when the FS ucode is
-		// cached: depth_func/zeta/msaa can toggle without a ucode edit. If the export config
-		// changed, update the consumer ctrl bits and force a pipeline reload. Inert unless
-		// emulate_depth_compare is enabled (the helper returns 0).
-		constexpr u32 fs_export_config_mask = (RSX_SHADER_CONTROL_EMULATE_DEPTH_COMPARE | RSX_SHADER_CONTROL_MULTISAMPLED_ZBUFFER);
-		const u32 export_ctrl = get_fragment_program_export_config();
-		if ((current_fragment_program.ctrl & fs_export_config_mask) != export_ctrl)
-		{
-			current_fragment_program.ctrl &= ~fs_export_config_mask;
-			current_fragment_program.ctrl |= export_ctrl;
-
-			m_graphics_state |= rsx::pipeline_state::fragment_program_state_dirty;
-		}
-
-		// Track the cyclic zeta state (depth feedback loop) so the backend can END the
-		// loop - restore the plain depth-attachment layout - on the first draw after
-		// depth-compare stops. Runs every draw (analyse is not gated by ucode-dirty).
-		const bool now_cyclic = (export_ctrl & RSX_SHADER_CONTROL_EMULATE_DEPTH_COMPARE) != 0;
-		const bool was_cyclic = m_graphics_state.test(rsx::zeta_address_is_cyclic);
-		if (now_cyclic)
-		{
-			m_graphics_state |= rsx::zeta_address_is_cyclic;
-		}
-		else
-		{
-			m_graphics_state.clear(rsx::zeta_address_is_cyclic);
-		}
-		if (was_cyclic && !now_cyclic)
-		{
-			m_graphics_state |= rsx::zeta_address_cyclic_barrier;
-		}
 
 		prefetch_vertex_program();
 		prefetch_fragment_program();
@@ -2182,10 +2111,6 @@ namespace rsx
 					current_fragment_program.ctrl |= RSX_SHADER_CONTROL_ALPHA_TO_COVERAGE;
 				}
 			}
-
-			// Depth-compare / multisampled-zbuffer export bits (inert unless
-			// emulate_depth_compare is enabled; the helper returns 0 otherwise).
-			current_fragment_program.ctrl |= get_fragment_program_export_config();
 		}
 		else if (method_registers.point_sprite_enabled() &&
 				 method_registers.current_draw_clause.primitive == primitive_type::points)
@@ -2333,31 +2258,6 @@ namespace rsx
 					default:
 						rsx_log.error("Depth texture bound to pipeline with unexpected format 0x%X", format);
 					}
-
-					// 0.0.41 cyclic-zeta early-Z escape: when this depth texture is the active
-					// zeta target sampled back (a genuine depth feedback loop), force the shader
-					// off early-Z so it reads the pre-draw depth. Raises DISABLE_EARLY_Z, which the
-					// consumer (VKFragmentProgram::insertMainEnd) turns into a gl_FragDepth write.
-					// Skipped when the shader already exports depth / discards / runs depth-compare
-					// emulation (those force late-Z anyway).
-					//
-					// Reconciliation vs upstream: we deliberately do NOT also set
-					// rsx::zeta_address_is_cyclic here. In this fork the cyclic texture barrier is
-					// issued from VKDraw's own bind-time is_cyclic_reference detection (load_texture_env),
-					// and the zeta_address_is_cyclic graphics-state bit is owned by
-					// analyse_current_rsx_pipeline for depth-compare-EQUAL feedback-loop teardown
-					// (its now_cyclic is gated on EMULATE_DEPTH_COMPARE). Setting it for the general
-					// case would make analyse clear it the next draw and spuriously raise
-					// zeta_address_cyclic_barrier every frame. Only the shader ctrl bit was missing.
-					if (sampler_descriptors[i]->is_cyclic_reference &&
-						m_framebuffer_layout.zeta_address != 0 &&
-						m_framebuffer_layout.zeta_write_enabled &&
-						!g_cfg.video.strict_rendering_mode &&
-						g_cfg.video.shader_precision != gpu_preset_level::low &&
-						!(current_fragment_program.ctrl & (CELL_GCM_SHADER_CONTROL_DEPTH_EXPORT | RSX_SHADER_CONTROL_META_USES_DISCARD | RSX_SHADER_CONTROL_EMULATE_DEPTH_COMPARE)))
-					{
-						current_fragment_program.ctrl |= RSX_SHADER_CONTROL_DISABLE_EARLY_Z;
-					}
 				}
 				else if (!backend_config.supports_hw_renormalization /* &&
 				    tex.min_filter() == rsx::texture_minify_filter::nearest &&
@@ -2390,36 +2290,66 @@ namespace rsx
 					}
 				}
 
-				if (const auto format_ex = tex.format_ex(); format_ex.features != 0)
+				if (rsx::is_int8_remapped_format(format))
 				{
-					// 0.0.41 unified texel format conversion (fragment_texture::format_ex):
-					// per-channel SEXT/EXPAND/GAMMA gated by the format's features and projected
-					// through the proper channel-remap shuffle, plus the FF_ feature bits that
-					// select 16-bit-precision math in the shader. Replaces the old hand-rolled
-					// INT8 remap lambda + the non-INT8 stopgap with the exact upstream path for
-					// every format (INT8 RGB + X16/Y16_X16/depth/HILO). Precedence SNORM>GAMMA>BX2.
-					texture_control |= format_ex.texel_remap_control;
-					texture_control |= format_ex.features << texture_control_bits::FORMAT_FEATURES_OFFSET;
+					// Special operations applied to 8-bit formats such as gamma correction and sign conversion
+					// NOTE: The unsigned_remap=bias flag being set flags the texture as being compressed normal (2n-1 / BX2) (UE3)
+					// NOTE: The ARGB8_signed flag means to reinterpret the raw bytes as signed. This is different than unsigned_remap=bias which does range decompression.
+					// This is a separate method of setting the format to signed mode without doing so per-channel
+					// Precedence = SNORM > GAMMA > UNSIGNED_REMAP (See Resistance 3 for GAMMA/BX2 relationship, UE3 for BX2 effect)
 
-					// Raise the format-convert path only when a real per-channel conversion is
-					// requested (the FF_ feature bits alone are inert in _process_texel).
-					if (format_ex.texel_remap_control)
+					const u32 argb8_signed = tex.argb_signed();                                                                                         // _SNROM
+					const u32 gamma = tex.gamma() & ~argb8_signed;                                                                                      // _SRGB
+					const u32 unsigned_remap = (tex.unsigned_remap() == CELL_GCM_TEXTURE_UNSIGNED_REMAP_NORMAL) ? 0u : (~(gamma | argb8_signed) & 0xF); // _BX2
+					u32 argb8_convert = gamma;
+
+					// The options are mutually exclusive
+					ensure((argb8_signed & gamma) == 0);
+					ensure((argb8_signed & unsigned_remap) == 0);
+					ensure((gamma & unsigned_remap) == 0);
+
+					// Helper function to apply a per-channel mask based on an input mask
+					const auto apply_sign_convert_mask = [&](u32 mask, u32 bit_offset)
 					{
-						current_fragment_program.ctrl |= RSX_SHADER_CONTROL_TEXTURE_FORMAT_CONVERT;
+						// TODO: Use actual remap mask to account for 0 and 1 overrides in default mapping
+						// TODO: Replace this clusterfuck of texture control with matrix transformation
+						const auto remap_ctrl = (tex.remap() >> 8) & 0xAA;
+						if (remap_ctrl == 0xAA)
+						{
+							argb8_convert |= (mask & 0xFu) << bit_offset;
+							return;
+						}
+
+						if ((remap_ctrl & 0x03) == 0x02)
+							argb8_convert |= (mask & 0x1u) << bit_offset;
+						if ((remap_ctrl & 0x0C) == 0x08)
+							argb8_convert |= (mask & 0x2u) << bit_offset;
+						if ((remap_ctrl & 0x30) == 0x20)
+							argb8_convert |= (mask & 0x4u) << bit_offset;
+						if ((remap_ctrl & 0xC0) == 0x80)
+							argb8_convert |= (mask & 0x8u) << bit_offset;
+					};
+
+					if (argb8_signed)
+					{
+						// Apply integer sign extension from uint8 to sint8 and renormalize
+						apply_sign_convert_mask(argb8_signed, texture_control_bits::SEXT_OFFSET);
 					}
 
-					// Shader-instruction BX2 (_bx2 / exp_tex): when the fragment ucode samples
-					// any texture with the bx2 modifier, seed this convertible texture's remap
-					// high bits (16-19) so _process_texel's expand path decompresses 2n-1.
-					// Mirrors upstream (RSXThread.cpp:2409). texture_params[i].remap was already
-					// set to tex.remap() above; this overwrites only the high nibble.
-					if (current_fp_metadata.bx2_texture_reads_mask)
+					if (unsigned_remap)
+					{
+						// Apply sign expansion, compressed normal-map style (2n - 1)
+						apply_sign_convert_mask(unsigned_remap, texture_control_bits::EXPAND_OFFSET);
+					}
+
+					texture_control |= argb8_convert;
+
+					// See the RENORMALIZE note above: raise the format-convert ctrl bit so
+					// the gated sext/gamma/BX2 texel conversion is actually emitted. Covers
+					// signed/gamma/BX2 8-bit-remapped formats that don't hit RENORMALIZE.
+					if (argb8_convert)
 					{
 						current_fragment_program.ctrl |= RSX_SHADER_CONTROL_TEXTURE_FORMAT_CONVERT;
-
-						const u32 remap_hi = tex.decoded_remap().shuffle_mask_bits(0xFu);
-						current_fragment_program.texture_params[i].remap &= ~(0xFu << 16u);
-						current_fragment_program.texture_params[i].remap |= (remap_hi << 16u);
 					}
 				}
 
@@ -2429,26 +2359,6 @@ namespace rsx
 
 		// Update texture configuration
 		current_fragment_program.texture_state.import(current_fp_texture_state, current_fp_metadata.referenced_textures_mask);
-
-#ifdef ANDROID
-		// [seethru2] Confirms the see-through-geometry fix on device. Logged once per unique
-		// ctrl (this runs on the RSX thread only, so no lock is needed). A see-through-class
-		// draw showing alpha_test=1 with tex_convert=1 confirms the alpha-channel format
-		// conversion was shifting col0.a out of the unorm space alpha_ref is compared in -
-		// now fixed by preserving raw alpha in _process_texel. Temporary diagnostic.
-		{
-			static std::unordered_set<u32> s_st2_seen;
-			if (s_st2_seen.insert(current_fragment_program.ctrl).second)
-			{
-				rsx_log.warning("[seethru2] ctrl=%#x alpha_test=%d alpha_func=%u alpha_ref=%.3f tex_convert=%d",
-					current_fragment_program.ctrl,
-					m_ctx->register_state->alpha_test_enabled() ? 1 : 0,
-					static_cast<u32>(m_ctx->register_state->alpha_func()),
-					m_ctx->register_state->alpha_ref(),
-					(current_fragment_program.ctrl & RSX_SHADER_CONTROL_TEXTURE_FORMAT_CONVERT) ? 1 : 0);
-			}
-		}
-#endif
 
 		// Sanity checks
 		if (current_fragment_program.ctrl & CELL_GCM_SHADER_CONTROL_DEPTH_EXPORT)
@@ -3415,56 +3325,6 @@ namespace rsx
 			on_frame_end(buffer, true);
 			ensure(m_queued_flip.pop(buffer));
 		}
-
-#ifdef __ANDROID__
-		// ADPF feed: publish this frame's actual CPU work (wall interval minus the
-		// idle/limiter sleep) and the presenting thread's OS tid so the app can drive
-		// Android's PerformanceHintManager. Measured at a fixed per-iteration point,
-		// so the previous iteration's frame-limiter sleep is captured in the idle
-		// delta and excluded. Advisory only - stored to atomics nobody in the core
-		// reads back, so this changes no rendering behavior. Cost is a subtraction
-		// plus a relaxed store per flip.
-		{
-			static thread_local u64 s_adpf_last_now = 0;
-			static thread_local u64 s_adpf_last_idle = 0;
-			static thread_local int s_adpf_tid = 0;
-			if (s_adpf_tid == 0)
-			{
-				s_adpf_tid = static_cast<int>(::gettid());
-			}
-			// Republish every flip (cheap relaxed store) so a recreated RSX thread
-			// overwrites a stale tid instead of leaving the app's hint session
-			// pointed at a dead thread after a restart.
-			rpcs3::utils::set_rsx_thread_tid(s_adpf_tid);
-			const u64 now_us = get_system_time();
-			const u64 idle_us = performance_counters.idle_time.load();
-			if (s_adpf_last_now != 0 && now_us > s_adpf_last_now)
-			{
-				const u64 wall = now_us - s_adpf_last_now;
-				// period = the flip-to-flip deadline (e.g. ~33.3ms when 30fps-locked). The
-				// app uses it as the ADPF target so a 30fps game is not judged against a fixed
-				// 60fps target (which would over-boost = more heat). Always valid.
-				rpcs3::utils::report_frame_period_ns(wall * 1000);
-
-				// work = the CPU busy time (wall minus idle) the scheduler must finish in time.
-				// performance_counters.idle_time is reset to 0 every ~30 frames by get_load(),
-				// so an idle delta that went backwards (idle_us < last) is a reset, not a real
-				// frame - skip it. Also skip when idle >= wall (idle accrues from FIFO/semaphore
-				// paths that can exceed the wall window). Reporting work=wall in those cases would
-				// feed a bogus "fully busy" sample and over-boost the scheduler (opposite of the
-				// heat-saver goal); skipping just leaves the app's last good sample in place.
-				if (idle_us >= s_adpf_last_idle)
-				{
-					if (const u64 idle = idle_us - s_adpf_last_idle; idle < wall)
-					{
-						rpcs3::utils::report_frame_work_ns((wall - idle) * 1000);
-					}
-				}
-			}
-			s_adpf_last_now = now_us;
-			s_adpf_last_idle = idle_us;
-		}
-#endif
 
 		double limit = 0.;
 		const auto frame_limit = g_disable_frame_limit ? frame_limit_type::none : g_cfg.video.frame_limit;
