@@ -30,7 +30,16 @@ void VKFragmentDecompilerThread::insertHeader(std::stringstream& OS)
 {
 	std::vector<const char*> required_extensions;
 
-	if (device_props.has_native_half_support)
+	// Declare the fp16 extension whenever the device supports native half-floats, not only
+	// when device_props.has_native_half_support is set here. The body's half-type usage
+	// (_mrt_color_t / round_to_8bit -> f16vec4) is decided later, in insertGlobalFunctions;
+	// with the upstream base decompiler that decision can land on fp16 while this header's
+	// gated flag has not yet been seen as set (this fork keeps its older VKFragmentProgram,
+	// which orders these steps differently than the new base). Declaring an available-but-
+	// unused extension is harmless, whereas omitting it when the body emits f16vec4 makes
+	// every fragment shader fail to compile.
+	const auto* fp_dev = vk::get_current_renderer();
+	if (device_props.has_native_half_support || (fp_dev && fp_dev->get_shader_types_support().allow_float16))
 	{
 		required_extensions.emplace_back("GL_EXT_shader_explicit_arithmetic_types_float16");
 	}
