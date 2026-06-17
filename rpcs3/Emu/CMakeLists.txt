@@ -294,7 +294,11 @@ target_sources(rpcs3_emu PRIVATE
     RSX/Program/CgBinaryFragmentProgram.cpp
     RSX/Program/CgBinaryVertexProgram.cpp
     RSX/Program/FragmentProgramDecompiler.cpp
-    RSX/Program/FragmentProgramRegister.cpp
+    RSX/Program/Assembler/FPASM.cpp
+    RSX/Program/Assembler/FPOpcodes.cpp
+    RSX/Program/Assembler/FPToCFG.cpp
+    RSX/Program/Assembler/Passes/FP/RegisterAnnotationPass.cpp
+    RSX/Program/Assembler/Passes/FP/RegisterDependencyPass.cpp
     RSX/Program/GLSLCommon.cpp
     RSX/Program/ProgramStateCache.cpp
     RSX/Program/ShaderInterpreter.cpp

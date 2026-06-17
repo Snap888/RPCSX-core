@@ -430,6 +430,25 @@ namespace rsx
 			return *this;
 		}
 
+		// Returns a pointer to the first element matching the predicate, or nullptr.
+		// Ported from upstream simple_array (used by the FP Assembler engine).
+		Ty* find_if(auto predicate)
+		{
+			for (auto it = begin(); it != end(); ++it)
+			{
+				if (std::invoke(predicate, *it))
+				{
+					return &(*it);
+				}
+			}
+			return nullptr;
+		}
+
+		const Ty* find_if(auto predicate) const
+		{
+			return const_cast<simple_array<Ty>*>(this)->find_if(predicate);
+		}
+
 		template <typename F, typename U = std::invoke_result_t<F, const Ty&>>
 			requires(std::is_invocable_v<F, const Ty&> && std::is_trivially_destructible_v<U>)
 		simple_array<U> map(F&& xform) const
