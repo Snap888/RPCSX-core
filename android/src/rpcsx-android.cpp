@@ -1923,7 +1923,7 @@ extern "C" bool _rpcsx_initialize(std::string_view rootDir,
   // ~29 MB / 194k lines. Raise those channels so only genuine warnings/errors survive.
   // g_cfg.log is empty by default, so Emu boot's set_channel_levels() is a no-op and
   // will not undo these. RSX is kept at warning to preserve the texture cache-miss
-  // perf signal (and the temporary [seethru] diagnostic, which is dedup'd).
+  // perf signal.
   logs::set_level("SPU", logs::level::error);
   logs::set_level("sys_fs", logs::level::error);
   logs::set_level("sys_event", logs::level::error);

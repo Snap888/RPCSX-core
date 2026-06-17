@@ -170,7 +170,6 @@ struct cfg_root : cfg::node
 		cfg::_bool use_gpu_texture_scaling{this, "Use GPU texture scaling", false};
 		cfg::_bool stretch_to_display_area{this, "Stretch To Display Area", false, true};
 		cfg::_bool force_high_precision_z_buffer{this, "Force High Precision Z buffer"};
-		cfg::_bool emulate_depth_compare{this, "Emulate Special Depth Comparison", false}; // depth_func==EQUAL self-compare emulation (needs frag_depth feedback bind)
 		cfg::_bool strict_rendering_mode{this, "Strict Rendering Mode"};
 		cfg::_bool disable_zcull_queries{this, "Disable ZCull Occlusion Queries", false, true};
 		cfg::_bool disable_video_output{this, "Disable Video Output", false, true};
