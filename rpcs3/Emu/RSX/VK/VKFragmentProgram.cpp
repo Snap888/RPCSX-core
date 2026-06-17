@@ -78,17 +78,32 @@ void VKFragmentDecompilerThread::insertOutputs(std::stringstream& OS)
 			{"ocol3", m_ctrl & CELL_GCM_SHADER_CONTROL_32_BITS_EXPORTS ? "r4" : "h8"},
 		};
 
-	// NOTE: We do not skip outputs, the only possible combinations are a(0), b(0), ab(0,1), abc(0,1,2), abcd(0,1,2,3)
 	u8 output_index = 0;
 	const bool float_type = (m_ctrl & CELL_GCM_SHADER_CONTROL_32_BITS_EXPORTS) || !device_props.has_native_half_support;
 	const auto reg_type = float_type ? "vec4" : getHalfTypeName(4);
 	for (uint i = 0; i < std::size(table); ++i)
 	{
-		if (m_parr.HasParam(PF_PARAM_NONE, reg_type, table[i].second))
+		if (!m_parr.HasParam(PF_PARAM_NONE, reg_type, table[i].second))
 		{
-			OS << "layout(location=" << std::to_string(output_index++) << ") " << "out vec4 " << table[i].first << ";\n";
-			vk_prog->output_color_masks[i] = -1;
+			continue;
 		}
+
+		if (i >= m_prog.mrt_buffers_count)
+		{
+			// Output register the ucode writes but there is no bound color target for
+			// (e.g. ocol0 in a depth-only/shadow pass where mrt_buffers_count == 0).
+			// Declaring it as a real layout output with no backing attachment is
+			// undefined and mishandled by strict drivers (Turnip). Match upstream:
+			// declare it as a plain temp so the gather op still has a target and DCE
+			// strips it, and mark the slot dead so the pipeline color-write mask for
+			// it is forced off.
+			OS << "vec4 " << table[i].first << "; // Unused\n";
+			vk_prog->output_color_masks[i] = 0;
+			continue;
+		}
+
+		OS << "layout(location=" << std::to_string(output_index++) << ") " << "out vec4 " << table[i].first << ";\n";
+		vk_prog->output_color_masks[i] = -1;
 	}
 }
 
