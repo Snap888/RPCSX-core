@@ -989,7 +989,7 @@ error_code sys_net_bnet_sendto(ppu_thread &ppu, s32 s, vm::cptr<void> buf,
                          flags);
   }
 
-  if (addr && addrlen < 8) {
+  if (addr && addrlen < sizeof(sys_net_sockaddr)) {
     sys_net.error("sys_net_bnet_sendto(s=%d): bad addrlen (%u)", s, addrlen);
     return -SYS_NET_EINVAL;
   }
@@ -1508,9 +1508,9 @@ error_code sys_net_bnet_select(ppu_thread &ppu, s32 nfds,
 #endif
     for (s32 i = 0; i < nfds; i++) {
       bool sig = false;
-      if (_fds[i].revents & (POLLIN | POLLHUP | POLLERR))
+      if ((_fds[i].revents & (POLLIN | POLLHUP | POLLERR)) && _readfds.bit(i))
         sig = true, rread.set(i);
-      if (_fds[i].revents & (POLLOUT | POLLERR))
+      if ((_fds[i].revents & (POLLOUT | POLLERR)) && _writefds.bit(i))
         sig = true, rwrite.set(i);
 
       if (sig) {

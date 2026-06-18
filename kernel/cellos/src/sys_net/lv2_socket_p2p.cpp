@@ -263,7 +263,7 @@ lv2_socket_p2p::sendto(s32 flags, const std::vector<u8> &buf,
   }
 
   ensure(opt_sn_addr);
-  ensure(socket); // ensures it has been bound
+  ensure(native_socket); // ensures it has been bound
   ensure(
       buf.size() <=
       static_cast<usz>(

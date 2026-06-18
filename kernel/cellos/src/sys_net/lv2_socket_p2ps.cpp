@@ -102,7 +102,6 @@ public:
 
         // reply is late, increases rtt
         auto &msg = it->second;
-        const auto addr = msg.dst_addr.sin_addr.s_addr;
         rtt_info rtt = rtts[msg.sock_id];
         // Only increases rtt once per loop(in case a big number of packets are
         // sent at once)
@@ -110,7 +109,7 @@ public:
           rtt.num_retries += 1;
           // Increases current rtt by 10%
           rtt.rtt_time += (rtt.rtt_time / 10);
-          rtts[addr] = rtt;
+          rtts[msg.sock_id] = rtt;
 
           rtt_increased.emplace(msg.sock_id);
         }
