@@ -56,6 +56,16 @@ std::string cfg_rpcn::get_path()
 	// cloud backup. Store rpcn.yml in the app-internal filesDir instead, which is
 	// private to the app and excluded from backup.
 	extern std::string g_android_internal_config_dir;
+
+	// If the app never handed us an internal dir (older app build, or the
+	// additive _rpcsx_setRpcnConfigDir entry point is absent), fall back to the
+	// external path rather than building a bogus relative "rpcn.yml". This keeps
+	// the emulator working on any app/core version skew.
+	if (g_android_internal_config_dir.empty())
+	{
+		return fs::get_config_dir(true) + "rpcn.yml";
+	}
+
 	const std::string internal_path = g_android_internal_config_dir + "rpcn.yml";
 
 	// One-time migration: move any existing external rpcn.yml into internal

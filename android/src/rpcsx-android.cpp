@@ -1859,8 +1859,24 @@ extern "C" bool _rpcsx_overlayPadData(int digital1, int digital2,
   return true;
 }
 
+// Optional, additive entry point: hand the core the app-private (internal)
+// storage dir so secrets like rpcn.yml can live off the MTP/USB-visible and
+// cloud-backed-up external storage. Kept SEPARATE from _rpcsx_initialize so the
+// app<->core ABI of the critical init path never changes: an old app simply
+// never calls this (the core falls back to external), and an old core simply
+// lacks the symbol (the app's dlsym yields null and skips the call). Either way
+// nothing crashes on version skew.
+extern "C" void _rpcsx_setRpcnConfigDir(std::string_view internalDir) {
+  if (internalDir.empty()) {
+    return;
+  }
+
+  auto internalDirStr = fix_dir_path(std::string(internalDir));
+  g_android_internal_config_dir = internalDirStr + "config/";
+  std::filesystem::create_directories(g_android_internal_config_dir);
+}
+
 extern "C" bool _rpcsx_initialize(std::string_view rootDir,
-                                  std::string_view internalDir,
                                   std::string_view user) {
   auto rootDirStr = fix_dir_path(std::string(rootDir));
 
@@ -1873,14 +1889,6 @@ extern "C" bool _rpcsx_initialize(std::string_view rootDir,
     std::error_code ec;
     // std::filesystem::remove_all(g_android_cache_dir, ec);
     std::filesystem::create_directories(g_android_cache_dir);
-  }
-
-  // Internal (app-private) config dir for secrets like rpcn.yml, kept off the
-  // MTP/USB-visible and cloud-backed-up external storage.
-  {
-    auto internalDirStr = fix_dir_path(std::string(internalDir));
-    g_android_internal_config_dir = internalDirStr + "config/";
-    std::filesystem::create_directories(g_android_internal_config_dir);
   }
 
   if (g_initialized) {
