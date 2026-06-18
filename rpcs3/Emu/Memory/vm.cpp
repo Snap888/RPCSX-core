@@ -605,6 +605,17 @@ namespace vm
 			{
 				to_clear = for_all_range_locks(to_clear & ~get_range_lock_bits(true), [&](u64 addr2, u32 size2)
 					{
+						constexpr u32 range_size_loc = vm::range_pos - 32;
+
+						// Skip read-only range locks (SPU reservation checks) when acquiring an
+						// exclusive writer lock - a write invalidates the reservation anyway, so
+						// the writer need not drain reservation readers (upstream 1250e428a; the
+						// producer half that tags these locks range_readable is already present).
+						if ((size2 >> range_size_loc) == (vm::range_readable >> vm::range_pos))
+						{
+							return 0;
+						}
+
 						// Split and check every 64K page separately
 						for (u64 hi = addr2 >> 16, max = (addr2 + size2 - 1) >> 16; hi <= max; hi++)
 						{
