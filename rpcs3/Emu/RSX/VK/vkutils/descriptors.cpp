@@ -40,7 +40,7 @@ namespace vk
 				}
 
 				m_notification_list.push_back(set);
-				rsx_log.warning("[descriptor_manager::register] Now monitoring %u descriptor sets", m_notification_list.size());
+				rsx_log.trace("[descriptor_manager::register] Now monitoring %u descriptor sets", m_notification_list.size());
 			}
 
 			void deregister(descriptor_set* set)
@@ -57,7 +57,7 @@ namespace vk
 					}
 				}
 
-				rsx_log.warning("[descriptor_manager::deregister] Now monitoring %u descriptor sets", m_notification_list.size());
+				rsx_log.trace("[descriptor_manager::deregister] Now monitoring %u descriptor sets", m_notification_list.size());
 			}
 
 			dispatch_manager() = default;
