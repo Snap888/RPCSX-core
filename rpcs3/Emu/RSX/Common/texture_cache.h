@@ -2347,24 +2347,6 @@ namespace rsx
 			const auto lookup_range = utils::address_range::start_length(attributes.address, attributes.pitch * required_surface_height);
 			reader_lock lock(m_cache_mutex);
 
-			// A float depth render target (z16_float / z24s8_float, backed by D32_SFLOAT*)
-			// sampled through a unorm depth descriptor (DEPTH16 / DEPTH24_D8) would be value
-			// converted to a unorm target by the surface-cache copy, remapping the extended
-			// float depth range into [0,1] and clamping near/far depths - which erases the
-			// head and legs of float shadow maps (e.g. Demon's Souls) - and would classify the
-			// sampled texture as unorm depth, clearing DEPTH_FLOAT so the receiver also applies
-			// its reference-depth clamp. Promote to the float depth variant (identical byte
-			// width, so all sizing above is unaffected) when the aliased surface is float, so
-			// the surface-cache copy keeps the float format and the sampler stays float depth.
-			if (helpers::is_gcm_depth_format(attributes.gcm_format))
-			{
-				if (const auto surf = m_rtts.get_surface_at(attributes.address);
-					surf && (surf->format_class() & RSX_FORMAT_CLASS_DEPTH_FLOAT_MASK))
-				{
-					attributes.gcm_format = helpers::get_compatible_depth_float_format(attributes.gcm_format);
-				}
-			}
-
 			auto result = fast_texture_search(cmd, attributes, scale, tex.decoded_remap(),
 				options, lookup_range, extended_dimension, m_rtts,
 				std::forward<Args>(extras)...);

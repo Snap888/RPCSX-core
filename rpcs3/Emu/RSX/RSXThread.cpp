@@ -2089,25 +2089,6 @@ namespace rsx
 		current_fragment_program.two_sided_lighting = m_ctx->register_state->two_side_light_en();
 		current_fragment_program.mrt_buffers_count = rsx::utility::get_mrt_buffers_count(m_ctx->register_state->surface_color_target());
 
-#ifdef __ANDROID__
-		// [shadowcaster] Correlate which depth surface each shadow-caster draw writes to.
-		// If the opaque torso (ctrl=0x40) and the alpha-tested legs/head (ctrl=0x400000)
-		// write the SAME zeta address, they share one shadow map; if different, the legs/head
-		// land somewhere the receiver never samples. depth_fmt tells the real surface format
-		// to compare against the receiver's classified format. Dedup'd; REMOVE once localized.
-		if (current_fragment_program.mrt_buffers_count == 0)
-		{
-			static std::unordered_set<u64> s_shadowcaster_seen;
-			const u32 sc_zeta = get_zeta_surface_address();
-			const u32 sc_fmt = static_cast<u32>(m_ctx->register_state->surface_depth_fmt());
-			const u64 sc_key = (static_cast<u64>(current_fragment_program.ctrl) << 32) ^ sc_zeta;
-			if (s_shadowcaster_seen.insert(sc_key).second)
-			{
-				rsx_log.error("[shadowcaster] zeta=0x%x depth_fmt=%u ctrl=0x%x", sc_zeta, sc_fmt, current_fragment_program.ctrl);
-			}
-		}
-#endif
-
 		if (method_registers.current_draw_clause.classify_mode() == primitive_class::polygon)
 		{
 			if (!backend_config.supports_normalized_barycentrics)
@@ -2246,25 +2227,6 @@ namespace rsx
 					default:
 						break;
 					}
-
-#ifdef __ANDROID__
-					// [shadowrecv] Every depth-class texture sampled, with its source address so
-					// it can be matched against [shadowcaster] zeta addresses. format_class is what
-					// the cache assigned; if a z16_float caster surface shows up here as
-					// DEPTH24_UNORM (DEPTH_FLOAT=0) the surface->texture classification is wrong.
-					// Dedup'd; REMOVE once localized.
-					{
-						static std::unordered_set<u64> s_shadowrecv_seen;
-						const u32 sr_addr = rsx::get_address(tex.offset(), tex.location());
-						const u32 sr_fc = static_cast<u32>(sampler_descriptors[i]->format_class);
-						const u32 sr_df = (texture_control & (1u << texture_control_bits::DEPTH_FLOAT)) ? 1u : 0u;
-						const u64 sr_key = (static_cast<u64>(sr_addr) << 8) ^ sr_fc;
-						if (s_shadowrecv_seen.insert(sr_key).second)
-						{
-							rsx_log.error("[shadowrecv] tex%u addr=0x%x fmt=0x%x format_class=%u DEPTH_FLOAT=%u zfunc=0x%x", i, sr_addr, format, sr_fc, sr_df, static_cast<u32>(tex.zfunc()));
-						}
-					}
-#endif
 
 					switch (format)
 					{
