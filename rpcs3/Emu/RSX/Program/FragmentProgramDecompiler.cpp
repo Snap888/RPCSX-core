@@ -72,6 +72,19 @@ std::vector<RegisterRef> get_fragment_program_output_set(u32 ctrl, u32 mrt_count
 
 		result.resize(mrt_count);
 	}
+	else if (ctrl & (RSX_SHADER_CONTROL_ALPHA_TEST | RSX_SHADER_CONTROL_ALPHA_TO_COVERAGE))
+	{
+		// Depth-only / shadow-caster passes (mrt_count == 0) bind no color target, but the
+		// ROP epilogue still runs alpha test / alpha-to-coverage, both of which read col0
+		// (output register 0). Seed col0 as a ROP input so the dependency pass completes
+		// its lanes across the CFG. Without this its alpha (.w) lane is left undefined at
+		// the epilogue when the ucode writes it conditionally, so the test discards every
+		// fragment - dropping alpha-tested cast shadows (Demon's Souls character legs/head)
+		// while opaque casters, which never read col0, still write depth correctly.
+		result.push_back((ctrl & CELL_GCM_SHADER_CONTROL_32_BITS_EXPORTS)
+			? s_fp32_output_set[0]
+			: s_fp16_output_set[0]);
+	}
 
 	if (ctrl & CELL_GCM_SHADER_CONTROL_DEPTH_EXPORT)
 	{
