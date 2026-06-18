@@ -101,6 +101,10 @@ extern std::string g_android_executable_dir;
 extern std::string g_android_config_dir;
 extern std::string g_android_cache_dir;
 
+// App-internal filesDir (/data/data/<pkg>/files). NOT exposed over MTP/USB and
+// not readable by other apps. Used only for the RPCN secret file (rpcn.yml).
+std::string g_android_internal_config_dir;
+
 static std::mutex g_virtual_pad_mutex;
 static std::shared_ptr<Pad> g_virtual_pad;
 
@@ -1856,6 +1860,7 @@ extern "C" bool _rpcsx_overlayPadData(int digital1, int digital2,
 }
 
 extern "C" bool _rpcsx_initialize(std::string_view rootDir,
+                                  std::string_view internalDir,
                                   std::string_view user) {
   auto rootDirStr = fix_dir_path(std::string(rootDir));
 
@@ -1868,6 +1873,14 @@ extern "C" bool _rpcsx_initialize(std::string_view rootDir,
     std::error_code ec;
     // std::filesystem::remove_all(g_android_cache_dir, ec);
     std::filesystem::create_directories(g_android_cache_dir);
+  }
+
+  // Internal (app-private) config dir for secrets like rpcn.yml, kept off the
+  // MTP/USB-visible and cloud-backed-up external storage.
+  {
+    auto internalDirStr = fix_dir_path(std::string(internalDir));
+    g_android_internal_config_dir = internalDirStr + "config/";
+    std::filesystem::create_directories(g_android_internal_config_dir);
   }
 
   if (g_initialized) {
