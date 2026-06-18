@@ -181,27 +181,18 @@ void VKFragmentDecompilerThread::insertConstants(std::stringstream& OS)
 
 	ensure(location <= m_binding_table.vertex_textures_first_bind_slot); // "Too many sampler descriptors!"
 
-	std::string constants_block;
-	for (const ParamType& PT : m_parr.params[PF_PARAM_UNIFORM])
-	{
-		if (PT.type == "sampler1D" ||
-			PT.type == "sampler2D" ||
-			PT.type == "sampler3D" ||
-			PT.type == "samplerCube")
-			continue;
-
-		for (const ParamItem& PI : PT.items)
-		{
-			constants_block += "	" + PT.type + " " + PI.name + ";\n";
-		}
-	}
-
-	if (!constants_block.empty())
+	// The upstream decompiler addresses fragment constants by index via _fetch_constant(N),
+	// backed by a flat vec4 array, instead of emitting one named uniform per constant. Declare
+	// that array (bounded, so it fits the fork's existing std140 uniform buffer - no SSBO
+	// needed) plus the macro. The CPU-side flat fill (write_fragment_constants_to_buffer over
+	// FragmentConstantOffsetCache) already produces exactly this layout and is unchanged.
+	if (!properties.constant_offsets.empty())
 	{
 		OS << "layout(std140, set = 0, binding = 2) uniform FragmentConstantsBuffer\n";
 		OS << "{\n";
-		OS << constants_block;
-		OS << "};\n\n";
+		OS << "	vec4 fc[" << properties.constant_offsets.size() << "];\n";
+		OS << "};\n";
+		OS << "#define _fetch_constant(x) fc[x]\n\n";
 	}
 
 	OS << "layout(std140, set = 0, binding = 3) uniform FragmentStateBuffer\n";
@@ -434,19 +425,13 @@ void VKFragmentProgram::Decompile(const RSXFragmentProgram& prog)
 
 	shader.create(::glsl::program_domain::glsl_fragment_program, source);
 
-	for (const ParamType& PT : decompiler.m_parr.params[PF_PARAM_UNIFORM])
+	// The upstream decompiler records constant ucode offsets in properties.constant_offsets
+	// (in _fetch_constant index order) rather than as named "fcN" uniform params. Source the
+	// offset cache from there; the values are the same ucode byte offsets the old named
+	// scheme parsed, and the flat fill consumes them index-for-index into fc[].
+	for (const auto offset : decompiler.properties.constant_offsets)
 	{
-		for (const ParamItem& PI : PT.items)
-		{
-			if (PT.type == "sampler1D" ||
-				PT.type == "sampler2D" ||
-				PT.type == "sampler3D" ||
-				PT.type == "samplerCube")
-				continue;
-
-			usz offset = atoi(PI.name.c_str() + 2);
-			FragmentConstantOffsetCache.push_back(offset);
-		}
+		FragmentConstantOffsetCache.push_back(offset);
 	}
 }
 
