@@ -1316,7 +1316,15 @@ namespace vk
 			return (vk_format == VK_FORMAT_R8G8_UNORM);
 		case CELL_GCM_TEXTURE_DEPTH24_D8:
 		case CELL_GCM_TEXTURE_DEPTH24_D8_FLOAT:
-			return (vk_format == VK_FORMAT_D24_UNORM_S8_UINT || vk_format == VK_FORMAT_D32_SFLOAT_S8_UINT);
+			// D32_SFLOAT (no stencil) backs a z16_float / DEPTH16_FLOAT surface. Games such as
+			// Demon's Souls render the character shadow map as z16_float and then sample it
+			// through a DEPTH24_D8 descriptor. Without accepting D32_SFLOAT here the surface is
+			// judged incompatible and force_convert bitcasts D32_SFLOAT -> D24_UNORM, remapping
+			// the extended float depth range into unorm [0,1] and clamping the near/far depth
+			// extremes - which drops the head and legs from the cast shadow while the mid-depth
+			// torso survives. Accept it so the float surface is sampled directly: format_class
+			// stays DEPTH16_FLOAT, DEPTH_FLOAT is set, and the receiver skips the depth clamp.
+			return (vk_format == VK_FORMAT_D24_UNORM_S8_UINT || vk_format == VK_FORMAT_D32_SFLOAT_S8_UINT || vk_format == VK_FORMAT_D32_SFLOAT);
 		case CELL_GCM_TEXTURE_X16:
 		case CELL_GCM_TEXTURE_DEPTH16:
 		case CELL_GCM_TEXTURE_DEPTH16_FLOAT:
