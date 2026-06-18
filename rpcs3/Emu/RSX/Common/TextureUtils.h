@@ -126,6 +126,56 @@ namespace rsx
 
 	using namespace format_class_;
 
+	enum format_features : u8
+	{
+		RSX_FORMAT_FEATURE_SIGNED_COMPONENTS    = (1 << 0),
+		RSX_FORMAT_FEATURE_BIASED_NORMALIZATION = (1 << 1),
+		RSX_FORMAT_FEATURE_GAMMA_CORRECTION     = (1 << 2),
+		RSX_FORMAT_FEATURE_16BIT_CHANNELS       = (1 << 3),  // Complements RSX_FORMAT_FEATURE_SIGNED_COMPONENTS
+	};
+
+	enum host_format_features : u8
+	{
+		RSX_HOST_FORMAT_FEATURE_SNORM = (1 << 0),
+		RSX_HOST_FORMAT_FEATURE_SRGB  = (1 << 1),
+	};
+
+	using enum format_features;
+
+	struct texture_format_ex
+	{
+		texture_format_ex() = default;
+		texture_format_ex(u32 bits)
+			: format_bits(bits)
+		{}
+
+		bool valid() const { return format_bits != 0; }
+		u32 format() const { return format_bits & ~(CELL_GCM_TEXTURE_LN | CELL_GCM_TEXTURE_UN); }
+
+		bool hw_SNORM_possible() const;
+		bool hw_SRGB_possible() const;
+
+		bool host_snorm_format_active() const { return host_features & RSX_HOST_FORMAT_FEATURE_SNORM; }
+		bool host_srgb_format_active() const { return host_features & RSX_HOST_FORMAT_FEATURE_SRGB; }
+
+		operator bool() const { return valid(); }
+
+		bool operator == (const texture_format_ex& that) const
+		{
+			return this->format_bits == that.format_bits &&
+				this->features == that.features &&
+				this->host_features == that.host_features &&
+				this->encoded_remap == that.encoded_remap;
+		}
+
+	//private:
+		u32 format_bits = 0;
+		u32 features = 0;
+		u32 encoded_remap = 0;
+		u32 texel_remap_control = 0;
+		u32 host_features = 0;
+	};
+
 	// Sampled image descriptor
 	class sampled_image_descriptor_base
 	{
@@ -162,6 +212,7 @@ namespace rsx
 		texture_upload_context upload_context = texture_upload_context::shader_read;
 		rsx::texture_dimension_extended image_type = texture_dimension_extended::texture_dimension_2d;
 		rsx::format_class format_class = RSX_FORMAT_CLASS_UNDEFINED;
+		texture_format_ex format_ex;
 		bool is_cyclic_reference = false;
 		u8 samples = 1;
 		u32 ref_address = 0;
@@ -259,6 +310,8 @@ namespace rsx
 	u32 get_max_depth_value(rsx::surface_depth_format2 format);
 	bool is_depth_stencil_format(rsx::surface_depth_format2 format);
 	bool is_int8_remapped_format(u32 format); // Returns true if the format is treated as INT8 by the RSX remapper.
+	u32 get_format_features(u32 texture_format);   // Texel-conversion feature bits the RSX remapper supports for a format.
+	u32 get_host_format_snorm_mask(u32 format);    // Which channels can host-SNORM for a format (alpha-hardcoded formats differ).
 
 	/**
 	 * Returns number of texel rows encoded in one pitch-length line of bytes
