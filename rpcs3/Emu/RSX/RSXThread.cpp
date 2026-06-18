@@ -2296,6 +2296,25 @@ namespace rsx
 							compare_mode > rsx::comparison_function::never)
 						{
 							current_fp_texture_state.shadow_textures |= (1 << i);
+
+#ifdef __ANDROID__
+							// [shadowprobe2] Receiver side: capture the sampled shadow map's
+							// classification. If it is z16/z24-FLOAT but DEPTH_FLOAT is NOT set,
+							// _texcoord_xform_shadow clamps the reference depth to 1.0 - which eats
+							// the extended-range head(near)/legs(far) shadow while sparing the
+							// mid-depth torso. Dedup'd; REMOVE once localized.
+							{
+								static std::unordered_set<u64> s_shadowprobe2_seen;
+								const u32 sp2_fc = static_cast<u32>(sampler_descriptors[i]->format_class);
+								const u32 sp2_df = (texture_control & (1u << texture_control_bits::DEPTH_FLOAT)) ? 1u : 0u;
+								const u32 sp2_zf = static_cast<u32>(compare_mode);
+								const u64 sp2_key = (static_cast<u64>(format) << 16) ^ (static_cast<u64>(sp2_fc) << 8) ^ (static_cast<u64>(sp2_df) << 4) ^ static_cast<u64>(sp2_zf);
+								if (s_shadowprobe2_seen.insert(sp2_key).second)
+								{
+									rsx_log.error("[shadowprobe2] shadow-tex%u: fmt=0x%x format_class=%u DEPTH_FLOAT=%u zfunc=0x%x", i, format, sp2_fc, sp2_df, sp2_zf);
+								}
+							}
+#endif
 						}
 						break;
 					}
