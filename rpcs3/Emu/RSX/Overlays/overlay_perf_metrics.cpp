@@ -445,6 +445,13 @@ namespace rsx
 					m_frametime_timer.Start();
 					m_frametime_graph.record_datapoint(elapsed_frame, do_update);
 					m_frametime_graph.set_title(fmt::format("Frametime: %4.1f", elapsed_frame).c_str());
+
+					// Accumulate jitter stats for the throttled Perf log (reveals the
+					// micro-jitter the 5s-averaged frametime hides).
+					if (m_ft_samples == 0 || elapsed_frame < m_ft_min) m_ft_min = elapsed_frame;
+					if (elapsed_frame > m_ft_max) m_ft_max = elapsed_frame;
+					if (elapsed_frame >= 40.0f) m_ft_hitches++; // frame slower than ~25 fps instantaneous
+					m_ft_samples++;
 				}
 
 				if (m_force_repaint)
@@ -533,8 +540,22 @@ namespace rsx
 				if (m_log_timer.GetElapsedTimeInMilliSec() >= 5000.0)
 				{
 					m_log_timer.Start();
-					rsx_log.notice("Perf: %.1f fps | frametime %.1f ms | CPU %.0f%% | RSX-load %.0f%%",
-						m_fps, (m_frametime > 0.f ? m_frametime : (m_fps > 0.f ? 1000.f / m_fps : 0.f)), m_cpu_usage, m_rsx_load);
+
+					// Append the frametime spread over the interval so the choppiness is
+					// visible in a shared log (the averaged frametime alone hides it). Only
+					// when the frametime graph is enabled (that is where samples are taken).
+					std::string ft_detail;
+					if (m_ft_samples > 0)
+					{
+						ft_detail = fmt::format(" (min %.1f / max %.1f ms, %u hitch>40ms / %u)",
+							m_ft_min, m_ft_max, m_ft_hitches, m_ft_samples);
+					}
+
+					rsx_log.notice("Perf: %.1f fps | frametime %.1f ms%s | CPU %.0f%% | RSX-load %.0f%%",
+						m_fps, (m_frametime > 0.f ? m_frametime : (m_fps > 0.f ? 1000.f / m_fps : 0.f)), ft_detail.c_str(), m_cpu_usage, m_rsx_load);
+
+					m_ft_min = m_ft_max = 0.f;
+					m_ft_samples = m_ft_hitches = 0;
 				}
 
 				// 2. Format output string
