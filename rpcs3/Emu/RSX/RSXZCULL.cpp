@@ -264,6 +264,17 @@ namespace rsx
 				return;
 			}
 
+			// Discard any running queries. The results will never be read anyway.
+			if (m_current_task && m_current_task->active)
+			{
+				discard_occlusion_query(m_current_task);
+				free_query(m_current_task);
+				m_current_task->active = false;
+
+				allocate_new_query(ptimer);
+				begin_occlusion_query(m_current_task);
+			}
+
 			if (!m_pending_writes.empty())
 			{
 				// Remove any dangling/unclaimed queries as the information is lost anyway
