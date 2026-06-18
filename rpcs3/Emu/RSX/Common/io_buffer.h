@@ -84,6 +84,16 @@ namespace rsx
 			return {utils::bless<T>(bytes), m_size / sizeof(T)};
 		}
 
+		// True when the backing pointer and size satisfy T's natural alignment.
+		// Callers that would otherwise cast to an over-aligned type (e.g. u128 /
+		// __uint128_t) on ARM use this to fall back to the byte-aligned x128 alias.
+		template <typename T>
+		bool is_naturally_aligned() const
+		{
+			return ((reinterpret_cast<uintptr_t>(data()) & (alignof(T) - 1)) == 0) &&
+				(m_size % sizeof(T)) == 0;
+		}
+
 		bool empty() const
 		{
 			return m_size == 0;

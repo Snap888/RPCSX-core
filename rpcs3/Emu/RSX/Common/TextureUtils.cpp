@@ -1084,13 +1084,27 @@ namespace rsx
 				// PS3 uses the Nvidia VTC memory layout for compressed 3D textures.
 				// This is only supported using Nvidia OpenGL.
 				// Remove the VTC tiling to support ATI and Vulkan.
-				copy_unmodified_block_vtc::copy_mipmap_level(dst_buffer.as_span<u128>(), src_layout.data.as_span<const u128>(), w, h, depth, get_row_pitch_in_block<u128>(w, caps.alignment), src_layout.pitch_in_block);
+				if (src_layout.data.is_naturally_aligned<u128>())
+				{
+					copy_unmodified_block_vtc::copy_mipmap_level(dst_buffer.as_span<u128>(), src_layout.data.as_span<const u128>(), w, h, depth, get_row_pitch_in_block<u128>(w, caps.alignment), src_layout.pitch_in_block);
+				}
+				else
+				{
+					copy_unmodified_block_vtc::copy_mipmap_level(dst_buffer.as_span<x128>(), src_layout.data.as_span<const x128>(), w, h, depth, get_row_pitch_in_block<u128>(w, caps.alignment), src_layout.pitch_in_block);
+				}
 			}
 			else if (is_3d && !is_po2 && caps.supports_vtc_decoding)
 			{
 				// In this case, hardware expects us to feed it a VTC input, but on PS3 we only have a linear one.
 				// We need to compress the 2D-planar DXT input into a VTC output
-				copy_linear_block_to_vtc::copy_mipmap_level(dst_buffer.as_span<u128>(), src_layout.data.as_span<const u128>(), w, h, depth, get_row_pitch_in_block<u128>(w, caps.alignment), src_layout.pitch_in_block);
+				if (src_layout.data.is_naturally_aligned<u128>())
+				{
+					copy_linear_block_to_vtc::copy_mipmap_level(dst_buffer.as_span<u128>(), src_layout.data.as_span<const u128>(), w, h, depth, get_row_pitch_in_block<u128>(w, caps.alignment), src_layout.pitch_in_block);
+				}
+				else
+				{
+					copy_linear_block_to_vtc::copy_mipmap_level(dst_buffer.as_span<x128>(), src_layout.data.as_span<const x128>(), w, h, depth, get_row_pitch_in_block<u128>(w, caps.alignment), src_layout.pitch_in_block);
+				}
 			}
 			else if (caps.supports_zero_copy)
 			{
@@ -1099,7 +1113,14 @@ namespace rsx
 			}
 			else
 			{
-				copy_unmodified_block::copy_mipmap_level(dst_buffer.as_span<u128>(), src_layout.data.as_span<const u128>(), 1, w, h, depth, 0, get_row_pitch_in_block<u128>(w, caps.alignment), src_layout.pitch_in_block);
+				if (src_layout.data.is_naturally_aligned<u128>())
+				{
+					copy_unmodified_block::copy_mipmap_level(dst_buffer.as_span<u128>(), src_layout.data.as_span<const u128>(), 1, w, h, depth, 0, get_row_pitch_in_block<u128>(w, caps.alignment), src_layout.pitch_in_block);
+				}
+				else
+				{
+					copy_unmodified_block::copy_mipmap_level(dst_buffer.as_span<x128>(), src_layout.data.as_span<const x128>(), 1, w, h, depth, 0, get_row_pitch_in_block<u128>(w, caps.alignment), src_layout.pitch_in_block);
+				}
 			}
 			break;
 		}
