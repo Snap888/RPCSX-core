@@ -2124,14 +2124,17 @@ namespace rsx
 		}
 
 #ifdef __ANDROID__
-		// [shadowtest] DECISIVE EXPERIMENT (REMOVE after answer): the col0/alpha-test
-		// hypothesis says alpha-tested depth-only shadow casters discard nondeterministically
-		// because col0.a is not reliably defined, dropping the head/legs/arms/weapon shadows
-		// (torso is opaque, never discards). Suppress the col0-reading discards in depth-only
-		// passes only (mrt_buffers_count == 0): if the full character shadow becomes solid,
-		// the alpha-test discard mechanism is CONFIRMED and the proper fix is to define col0;
-		// if nothing changes, the cause is elsewhere (surface-cache coherency / occlusion).
-		// Color passes are untouched, so vegetation / alpha-tested rendering is unaffected.
+		// Do not run the fragment alpha test / alpha-to-coverage in depth-only (shadow caster)
+		// passes. Both read col0, which is not reliably resolved for a depth-only pass
+		// (mrt_buffers_count == 0) in our fragment pipeline, so the test discards shadow-caster
+		// geometry that should have written depth - dropping the cast shadow of alpha-tested
+		// character parts (arms, weapon, shield, head/legs) while the opaque torso, which never
+		// alpha-tests, casts normally. The 0.0.41 ROP rework that enabled alpha-tested vegetation
+		// is what started running this test in depth-only passes. Suppressing it here lets the
+		// full character cast its shadow; the only trade-off is that alpha-tested geometry casts
+		// a solid (rather than cut-out) shadow, which is minor. Color passes are untouched, so
+		// vegetation and all alpha-tested color rendering are unaffected. Validated on-device
+		// (Adreno/Turnip); gated to Android since desktop is unaffected.
 		if (current_fragment_program.mrt_buffers_count == 0)
 		{
 			current_fragment_program.ctrl &= ~(RSX_SHADER_CONTROL_ALPHA_TEST | RSX_SHADER_CONTROL_ALPHA_TO_COVERAGE);

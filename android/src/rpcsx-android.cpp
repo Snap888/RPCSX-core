@@ -3567,7 +3567,14 @@ extern "C" void _rpcsx_rpcnSetEnabled(int enabled) {
     g_cfg.net.psn_status.set(np_psn_status::psn_rpcn);
     g_cfg.net.net_active.set(np_internet_status::enabled);
   } else {
+    // Disable both PSN and Internet so the live config is fully offline (symmetric with the
+    // enable path). NOTE: a per-game custom config that pins net status overrides the global
+    // config at game boot, so a game already set to online via its per-game config keeps
+    // connecting until that per-game online setting is also cleared - and an already-open
+    // session is not torn down here. Full live disconnect + per-game override clearing is a
+    // separate, to-be-validated change.
     g_cfg.net.psn_status.set(np_psn_status::disabled);
+    g_cfg.net.net_active.set(np_internet_status::disabled);
   }
   Emulator::SaveSettings(g_cfg.to_string(), "");
   rpcsx_android.notice("RPCN: %s", enabled ? "enabled" : "disabled");
