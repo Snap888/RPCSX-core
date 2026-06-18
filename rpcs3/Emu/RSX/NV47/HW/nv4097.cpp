@@ -638,8 +638,17 @@ namespace rsx
 			case 2:
 				break;
 			default:
-				rsx_log.error("Unknown render mode %d", mode);
+			{
+				// Throttle: a corrupt/garbage command stream can hammer this with one mode value.
+				struct logged_t
+				{
+					atomic_t<u8> logged_cause[256]{};
+				};
+
+				const auto& is_error = ::at32(g_fxo->get<logged_t>().logged_cause, mode).try_inc(10);
+				(is_error ? rsx_log.error : rsx_log.trace)("Unknown render mode %d", mode);
 				return;
+			}
 			}
 
 			const u32 offset = arg & 0xffffff;
