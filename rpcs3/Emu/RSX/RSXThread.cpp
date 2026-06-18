@@ -2123,46 +2123,6 @@ namespace rsx
 			current_fragment_program.texcoord_control_mask |= u32(method_registers.point_sprite_control_mask()) << 16;
 		}
 
-#ifdef __ANDROID__
-		// [shadowprobe] Depth-only (shadow-caster) draw state. Alpha-test, depth-clip, the
-		// decompiler and output-declaration are all ruled out on-device, so capture the
-		// fixed-function state never looked at: face culling and the depth-bounds test (which
-		// would clip head=near + legs=far while sparing the mid-depth torso - the exact
-		// symptom). Dedup'd per state tuple; REMOVE once localized.
-		{
-			const u32 sp_mrt = current_fragment_program.mrt_buffers_count;
-			if (sp_mrt == 0)
-			{
-				auto* sp_rs = m_ctx->register_state;
-				const u32 sp_cull_en = sp_rs->cull_face_enabled() ? 1u : 0u;
-				const u32 sp_cull = static_cast<u32>(sp_rs->cull_face_mode());
-				const u32 sp_front = static_cast<u32>(sp_rs->front_face_mode());
-				const u32 sp_dtest = sp_rs->depth_test_enabled() ? 1u : 0u;
-				const u32 sp_dfunc = static_cast<u32>(sp_rs->depth_func());
-				const u32 sp_dwrite = sp_rs->depth_write_enabled() ? 1u : 0u;
-				const u32 sp_db_en = sp_rs->depth_bounds_test_enabled() ? 1u : 0u;
-				const int sp_db_min = static_cast<int>(sp_rs->depth_bounds_min() * 1000.f);
-				const int sp_db_max = static_cast<int>(sp_rs->depth_bounds_max() * 1000.f);
-				const u32 sp_atest = sp_rs->alpha_test_enabled() ? 1u : 0u;
-				const u32 sp_clipw = sp_rs->surface_clip_width();
-				const u32 sp_cliph = sp_rs->surface_clip_height();
-				const u32 sp_tex0 = sp_rs->fragment_textures[0].enabled() ? static_cast<u32>(sp_rs->fragment_textures[0].format()) : 0u;
-				const u64 sp_key = (static_cast<u64>(current_fragment_program.ctrl) << 32) ^
-					(static_cast<u64>(sp_cull_en) << 28) ^ (static_cast<u64>(sp_cull & 0xf) << 24) ^
-					(static_cast<u64>(sp_front & 0xf) << 20) ^ (static_cast<u64>(sp_dfunc & 0xf) << 16) ^
-					(static_cast<u64>(sp_db_en) << 12) ^ (static_cast<u64>(sp_atest) << 11) ^
-					(static_cast<u64>(sp_tex0 & 0xff) << 2);
-				static std::unordered_set<u64> s_shadowprobe_seen;
-				if (s_shadowprobe_seen.insert(sp_key).second)
-				{
-					rsx_log.error("[shadowprobe] depth-only: cull_en=%u cull=0x%x front=0x%x dtest=%u dfunc=0x%x dwrite=%u dbounds_en=%u db=[%d,%d]m atest=%u clip=%ux%u tex0_fmt=0x%x ctrl=0x%x",
-						sp_cull_en, sp_cull, sp_front, sp_dtest, sp_dfunc, sp_dwrite, sp_db_en, sp_db_min, sp_db_max,
-						sp_atest, sp_clipw, sp_cliph, sp_tex0, current_fragment_program.ctrl);
-				}
-			}
-		}
-#endif
-
 		// Check if framebuffer is actually an XRGB format and not a WZYX format
 		switch (m_ctx->register_state->surface_color())
 		{
@@ -2296,25 +2256,6 @@ namespace rsx
 							compare_mode > rsx::comparison_function::never)
 						{
 							current_fp_texture_state.shadow_textures |= (1 << i);
-
-#ifdef __ANDROID__
-							// [shadowprobe2] Receiver side: capture the sampled shadow map's
-							// classification. If it is z16/z24-FLOAT but DEPTH_FLOAT is NOT set,
-							// _texcoord_xform_shadow clamps the reference depth to 1.0 - which eats
-							// the extended-range head(near)/legs(far) shadow while sparing the
-							// mid-depth torso. Dedup'd; REMOVE once localized.
-							{
-								static std::unordered_set<u64> s_shadowprobe2_seen;
-								const u32 sp2_fc = static_cast<u32>(sampler_descriptors[i]->format_class);
-								const u32 sp2_df = (texture_control & (1u << texture_control_bits::DEPTH_FLOAT)) ? 1u : 0u;
-								const u32 sp2_zf = static_cast<u32>(compare_mode);
-								const u64 sp2_key = (static_cast<u64>(format) << 16) ^ (static_cast<u64>(sp2_fc) << 8) ^ (static_cast<u64>(sp2_df) << 4) ^ static_cast<u64>(sp2_zf);
-								if (s_shadowprobe2_seen.insert(sp2_key).second)
-								{
-									rsx_log.error("[shadowprobe2] shadow-tex%u: fmt=0x%x format_class=%u DEPTH_FLOAT=%u zfunc=0x%x", i, format, sp2_fc, sp2_df, sp2_zf);
-								}
-							}
-#endif
 						}
 						break;
 					}
