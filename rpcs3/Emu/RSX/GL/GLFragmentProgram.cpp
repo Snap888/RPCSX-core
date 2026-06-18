@@ -166,27 +166,16 @@ void GLFragmentDecompilerThread::insertConstants(std::stringstream& OS)
 
 	OS << "\n";
 
-	std::string constants_block;
-	for (const ParamType& PT : m_parr.params[PF_PARAM_UNIFORM])
-	{
-		if (PT.type == "sampler1D" ||
-			PT.type == "sampler2D" ||
-			PT.type == "sampler3D" ||
-			PT.type == "samplerCube")
-			continue;
-
-		for (const ParamItem& PI : PT.items)
-		{
-			constants_block += "	" + PT.type + " " + PI.name + ";\n";
-		}
-	}
-
-	if (!constants_block.empty())
+	// The upstream decompiler addresses fragment constants by index via _fetch_constant(N)
+	// over a flat vec4 array (mirrors the VK backend). Declare that array + the macro so the
+	// shared decompiler output is valid for GL too; the flat CPU fill is unchanged.
+	if (!properties.constant_offsets.empty())
 	{
 		OS << "layout(std140, binding = " << GL_FRAGMENT_CONSTANT_BUFFERS_BIND_SLOT << ") uniform FragmentConstantsBuffer\n";
 		OS << "{\n";
-		OS << constants_block;
-		OS << "};\n\n";
+		OS << "	vec4 fc[" << properties.constant_offsets.size() << "];\n";
+		OS << "};\n";
+		OS << "#define _fetch_constant(x) fc[x]\n\n";
 	}
 
 	OS << "layout(std140, binding = " << GL_FRAGMENT_STATE_BIND_SLOT << ") uniform FragmentStateBuffer\n";
@@ -392,19 +381,12 @@ void GLFragmentProgram::Decompile(const RSXFragmentProgram& prog)
 
 	decompiler.Task();
 
-	for (const ParamType& PT : decompiler.m_parr.params[PF_PARAM_UNIFORM])
+	// Source the constant offset cache from the decompiler's index-ordered constant_offsets
+	// (mirrors the VK backend); the old 'fcN' param-name parsing no longer applies because
+	// the upstream decompiler emits no named constant params.
+	for (const auto offset : decompiler.properties.constant_offsets)
 	{
-		for (const ParamItem& PI : PT.items)
-		{
-			if (PT.type == "sampler1D" ||
-				PT.type == "sampler2D" ||
-				PT.type == "sampler3D" ||
-				PT.type == "samplerCube")
-				continue;
-
-			usz offset = atoi(PI.name.c_str() + 2);
-			FragmentConstantOffsetCache.push_back(offset);
-		}
+		FragmentConstantOffsetCache.push_back(offset);
 	}
 
 	shader.create(::glsl::program_domain::glsl_fragment_program, source);
