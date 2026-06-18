@@ -309,7 +309,6 @@ namespace rsx
 	u8 get_format_sample_count(rsx::surface_antialiasing antialias);
 	u32 get_max_depth_value(rsx::surface_depth_format2 format);
 	bool is_depth_stencil_format(rsx::surface_depth_format2 format);
-	bool is_int8_remapped_format(u32 format); // Returns true if the format is treated as INT8 by the RSX remapper.
 	u32 get_format_features(u32 texture_format);   // Texel-conversion feature bits the RSX remapper supports for a format.
 	u32 get_host_format_snorm_mask(u32 format);    // Which channels can host-SNORM for a format (alpha-hardcoded formats differ).
 

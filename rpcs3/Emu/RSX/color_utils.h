@@ -100,6 +100,28 @@ namespace rsx
 			return color4_base<T>(shuffled[1], shuffled[2], shuffled[3], shuffled[0]);
 		}
 
+		// Remap an action mask (a per-channel selector of channels needing an operation,
+		// e.g. SNORM/BX2) through the channel remap, producing the final post-sampling mask.
+		u32 shuffle_mask_bits(u32 bits) const
+		{
+			if (!bits || encoded == RSX_TEXTURE_REMAP_IDENTITY) [[likely]]
+			{
+				return bits;
+			}
+
+			u32 result = 0;
+			for (u8 channel = 0; channel < 4; ++channel)
+			{
+				if (control_map[channel] != CELL_GCM_TEXTURE_REMAP_REMAP ||
+					(bits & (1u << channel_map[channel])) == 0)
+				{
+					continue;
+				}
+				result |= (1u << channel);
+			}
+			return result;
+		}
+
 		template <typename T>
 			requires std::is_integral_v<T> || std::is_enum_v<T>
 		texture_channel_remap_t with_encoding(T encoding) const
