@@ -837,7 +837,7 @@ protected:
 	struct pattern_info
 	{
 		// Address range (legacy putllc0/putllc16/rchcnt_loop patterns)
-		utils::address_range range;
+		utils::address_range32 range;
 
 		// Info via integral
 		u64 info{};

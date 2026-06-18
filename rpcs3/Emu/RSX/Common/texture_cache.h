@@ -150,7 +150,7 @@ namespace rsx
 			u16 x = 0;
 			u16 y = 0;
 
-			utils::address_range cache_range;
+			utils::address_range32 cache_range;
 			bool do_not_cache = false;
 
 			deferred_subresource() = default;
@@ -1819,7 +1819,7 @@ namespace rsx
 			m_uncached_subresources.clear();
 		}
 
-		void notify_surface_changed(const utils::address_range& range)
+		void notify_surface_changed(const utils::address_range32& range)
 		{
 			for (auto It = m_temporary_subresource_cache.begin(); It != m_temporary_subresource_cache.end();)
 			{
@@ -1843,7 +1843,7 @@ namespace rsx
 			const size3f& scale,
 			const texture_channel_remap_t& remap,
 			const texture_cache_search_options& options,
-			const utils::address_range& memory_range,
+			const utils::address_range32& memory_range,
 			rsx::texture_dimension_extended extended_dimension,
 			SurfaceStoreType& m_rtts, Args&&... /*extras*/)
 		{
@@ -2344,7 +2344,7 @@ namespace rsx
 				extended_dimension = std::max(extended_dimension, rsx::texture_dimension_extended::texture_dimension_2d);
 			}
 
-			const auto lookup_range = utils::address_range::start_length(attributes.address, attributes.pitch * required_surface_height);
+			const auto lookup_range = utils::address_range32::start_length(attributes.address, attributes.pitch * required_surface_height);
 			reader_lock lock(m_cache_mutex);
 
 			auto result = fast_texture_search(cmd, attributes, scale, tex.decoded_remap(),
@@ -2421,7 +2421,7 @@ namespace rsx
 						attr2.pitch = attr2.width * attr2.bpp;
 					}
 
-					const auto range = utils::address_range::start_length(attr2.address, attr2.pitch * attr2.height);
+					const auto range = utils::address_range32::start_length(attr2.address, attr2.pitch * attr2.height);
 					auto ret = fast_texture_search(cmd, attr2, scale, tex.decoded_remap(),
 						options, range, extended_dimension, m_rtts, std::forward<Args>(extras)...);
 
@@ -2459,7 +2459,7 @@ namespace rsx
 					}
 
 					const u32 cache_end = attr2.address + (attr2.pitch * attr2.height);
-					result.external_subresource_desc.cache_range = utils::address_range::start_end(attributes.address, cache_end);
+					result.external_subresource_desc.cache_range = utils::address_range32::start_end(attributes.address, cache_end);
 
 					result.external_subresource_desc.sections_to_copy = std::move(sections);
 					return result;
@@ -2577,7 +2577,7 @@ namespace rsx
 				src_address += (src.width - src_w) * src_bpp;
 			}
 
-			const auto get_tiled_region = [&](const utils::address_range& range)
+			const auto get_tiled_region = [&](const utils::address_range32& range)
 			{
 				auto rsxthr = rsx::get_current_renderer();
 				return rsxthr->get_tiled_memory_region(range);
@@ -2665,7 +2665,7 @@ namespace rsx
 				return true;
 			};
 
-			auto validate_fbo_integrity = [&](const utils::address_range& range, bool is_depth_texture)
+			auto validate_fbo_integrity = [&](const utils::address_range32& range, bool is_depth_texture)
 			{
 				const bool will_upload = is_depth_texture ? !!g_cfg.video.read_depth_buffer : !!g_cfg.video.read_color_buffers;
 				if (!will_upload)
@@ -2687,8 +2687,8 @@ namespace rsx
 			};
 
 			// Check tiled mem
-			const auto dst_tile = get_tiled_region(utils::address_range::start_length(dst_address, dst.pitch * dst.clip_height));
-			const auto src_tile = get_tiled_region(utils::address_range::start_length(src_address, src.pitch * src.height));
+			const auto dst_tile = get_tiled_region(utils::address_range32::start_length(dst_address, dst.pitch * dst.clip_height));
+			const auto src_tile = get_tiled_region(utils::address_range32::start_length(src_address, src.pitch * src.height));
 			const auto dst_is_tiled = !!dst_tile;
 			const auto src_is_tiled = !!src_tile;
 
@@ -2717,7 +2717,7 @@ namespace rsx
 				// If we have a pitched write, or a suspiciously large transfer, we likely have a valid write.
 
 				// Invalidate surfaces in range. Sample tests should catch overlaps in theory.
-				m_rtts.invalidate_range(utils::address_range::start_length(dst_address, dst.pitch * dst_h));
+				m_rtts.invalidate_range(utils::address_range32::start_length(dst_address, dst.pitch * dst_h));
 			}
 
 			// FBO re-validation. It is common for GPU and CPU data to desync as we do not have a way to share memory pages directly between the two (in most setups)

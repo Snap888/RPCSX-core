@@ -636,7 +636,7 @@ namespace rsx
 		int remove_duplicates_fast_impl(std::vector<surface_overlap_info>& sections, const rsx::address_range& range)
 		{
 			// Range tests to check for gaps
-			std::list<utils::address_range> m_ranges;
+			std::list<utils::address_range32> m_ranges;
 			bool invalidate_sections = false;
 			int removed_count = 0;
 
@@ -870,10 +870,10 @@ namespace rsx
 		}
 
 		std::tuple<std::vector<surface_type>, std::vector<surface_type>>
-		find_overlapping_set(const utils::address_range& range) const
+		find_overlapping_set(const utils::address_range32& range) const
 		{
 			std::vector<surface_type> color_result, depth_result;
-			utils::address_range result_range;
+			utils::address_range32 result_range;
 
 			if (m_render_targets_memory_range.valid() &&
 				range.overlaps(m_render_targets_memory_range))
@@ -908,7 +908,7 @@ namespace rsx
 
 		void write_to_dma_buffers(
 			command_list_type command_list,
-			const utils::address_range& range)
+			const utils::address_range32& range)
 		{
 			auto block_range = m_dma_block.to_block_range(range);
 			auto [color_data, depth_stencil_data] = find_overlapping_set(block_range);
@@ -1106,7 +1106,7 @@ namespace rsx
 				return {};
 			}
 
-			const auto test_range = utils::address_range::start_length(texaddr, (required_pitch * required_height) - (required_pitch - surface_internal_pitch));
+			const auto test_range = utils::address_range32::start_length(texaddr, (required_pitch * required_height) - (required_pitch - surface_internal_pitch));
 
 			auto process_list_function = [&](surface_ranged_map& data, bool is_depth)
 			{
@@ -1241,7 +1241,7 @@ namespace rsx
 
 		void check_for_duplicates(std::vector<surface_overlap_info>& sections)
 		{
-			utils::address_range test_range;
+			utils::address_range32 test_range;
 			for (const auto& section : sections)
 			{
 				const auto range = section.surface->get_memory_range();
@@ -1298,7 +1298,7 @@ namespace rsx
 		void invalidate_all()
 		{
 			// Unbind and invalidate all resources
-			auto free_resource_list = [&](auto& data, const utils::address_range& range)
+			auto free_resource_list = [&](auto& data, const utils::address_range32& range)
 			{
 				for (auto it = data.begin_range(range); it != data.end(); ++it)
 				{
@@ -1387,7 +1387,7 @@ namespace rsx
 
 		void collapse_dirty_surfaces(command_list_type cmd, problem_severity severity)
 		{
-			auto process_list_function = [&](surface_ranged_map& data, const utils::address_range& range)
+			auto process_list_function = [&](surface_ranged_map& data, const utils::address_range32& range)
 			{
 				for (auto It = data.begin_range(range); It != data.end();)
 				{

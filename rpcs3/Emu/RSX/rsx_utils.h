@@ -14,9 +14,9 @@ extern "C"
 
 namespace rsx
 {
-	// Import address_range utilities
-	using utils::address_range;
-	using utils::address_range_vector;
+	// Import address_range utilities (address_range is now a template; alias the u32 width)
+	using address_range = utils::address_range32;
+	using address_range_vector = utils::address_range_vector32;
 	using utils::next_page;
 	using utils::page_end;
 	using utils::page_for;

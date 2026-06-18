@@ -703,7 +703,7 @@ error_code sys_rsx_context_attribute(u32 context_id, u32 package_id, u64 a3,
     // const u32 bank = (((a4 >> 32) & 0xFFFFFFFF) >> 4) & 0xF;
     const bool bound = ((a4 >> 32) & 0x3) != 0;
 
-    const auto range = utils::address_range::start_length(offset, size);
+    const auto range = utils::address_range32::start_length(offset, size);
 
     if (bound) {
       if (!size || !pitch) {
@@ -791,7 +791,7 @@ error_code sys_rsx_context_attribute(u32 context_id, u32 package_id, u64 a3,
 
     if (bound) {
       const auto cull_range =
-          utils::address_range::start_length(cullStart, width * height);
+          utils::address_range32::start_length(cullStart, width * height);
 
       // cullStart is an offset inside ZCULL RAM which is 3MB long, check bounds
       // width and height are not allowed to be zero (checked by range.valid())
