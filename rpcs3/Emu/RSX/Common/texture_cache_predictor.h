@@ -120,13 +120,29 @@ namespace rsx
 		texture_cache_predictor_entry_history_queue<max_write_history_size> write_history;
 
 		static const u32 max_confidence = 8;      // Cannot be more "confident" than this value
+#ifdef __ANDROID__
+		// Mobile-tiler tuning. On Android the RSX/GPU is typically idle (sync-bound, RSX-load ~0%)
+		// while the CPU stalls on synchronous color-buffer readbacks (Write Color Buffers titles
+		// like Demon's Souls). A speculative pre-flush there is nearly free (no GPU contention),
+		// so we engage the predictor sooner and stop punishing a wrong guess into a multi-frame
+		// rebuild: cross the confidence threshold on the first repeat of a stable read-back region
+		// so the framebuffer-setup pre-flush fires and the later CPU read hits an already-signaled
+		// fence (fast path) instead of spinning on a fresh GPU copy (the tens-to-hundreds-of-ms hitch).
+		static const u32 confident_threshold = 4;
+		static const u32 starting_confidence = 4;
+#else
 		static const u32 confident_threshold = 6; // We are confident if confidence >= confidence_threshold
 		static const u32 starting_confidence = 3;
+#endif
 
 		static const u32 confidence_guessed_flush = 2;    // Confidence granted when we correctly guess there will be a flush
 		static const u32 confidence_guessed_no_flush = 1; // Confidence granted when we correctly guess there won't be a flush
 		static const u32 confidence_incorrect_guess = -2; // Confidence granted when our guess is incorrect
+#ifdef __ANDROID__
+		static const u32 confidence_mispredict = -2;      // Idle-GPU: a wrong speculative flush is near-free, don't force a rebuild
+#else
 		static const u32 confidence_mispredict = -4;      // Confidence granted when a speculative flush is incorrect
+#endif
 
 		u32 confidence;
 
