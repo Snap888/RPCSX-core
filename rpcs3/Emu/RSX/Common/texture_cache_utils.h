@@ -1628,7 +1628,11 @@ namespace rsx
 
 		void on_miss()
 		{
-			rsx_log.warning("Cache miss at address 0x%X. This is gonna hurt...", get_section_base());
+			// Downgraded warning->trace to match upstream: on sync-heavy titles (e.g. Demon's Souls
+			// reading back a render target every frame) this fires 8-32x/sec on the RSX/PPU hot path;
+			// the readback stall is inherent, but the warning-level string-format + log I/O is pure
+			// overhead during the exact jitter window. Kept at trace so it is free unless explicitly enabled.
+			rsx_log.trace("Cache miss at address 0x%X. This is gonna hurt...", get_section_base());
 			m_tex_cache->on_miss(*derived());
 		}
 
