@@ -1004,6 +1004,12 @@ namespace rsx
 		fifo_ctrl = std::make_unique<::rsx::FIFO::FIFO_control>(this);
 		fifo_ctrl->set_get(ctrl->get);
 
+		resolution_scaling_config =
+		{
+			.scale_percent = static_cast<u16>(g_cfg.video.resolution_scale_percent),
+			.min_scalable_dimension = static_cast<u16>(g_cfg.video.min_scalable_dimension),
+		};
+
 		last_guest_flip_timestamp = get_system_time() - 1000000;
 
 		vblank_count = 0;

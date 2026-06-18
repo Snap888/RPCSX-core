@@ -14,9 +14,13 @@ extern "C"
 
 namespace rsx
 {
-	// Import address_range utilities (address_range is now a template; alias the u32 width)
+	// Import address_range utilities (address_range is now a template; alias the u32 width).
+	// Provide both the legacy fork spelling (address_range) and the upstream spelling
+	// (address_range32) so re-vendored upstream cache files resolve unchanged.
 	using address_range = utils::address_range32;
 	using address_range_vector = utils::address_range_vector32;
+	using utils::address_range32;
+	using utils::address_range_vector32;
 	using utils::next_page;
 	using utils::page_end;
 	using utils::page_for;
@@ -228,6 +232,20 @@ namespace rsx
 		u32 rsx_address;
 		u8* pixels;
 		bool swizzled;
+	};
+
+	struct surface_scaling_config_t
+	{
+		u16 scale_percent = 100;
+		u16 min_scalable_dimension = 0;
+
+		f32 scale_factor() const { return scale_percent * 0.01f; }
+
+		bool operator == (const surface_scaling_config_t& that) const
+		{
+			return this->scale_percent == that.scale_percent &&
+				this->min_scalable_dimension == that.min_scalable_dimension;
+		}
 	};
 
 	template <typename T>
@@ -643,6 +661,62 @@ namespace rsx
 		}
 
 		return {width, height};
+	}
+
+	// Per-surface variants (upstream cache cluster): scale is taken from an explicit
+	// surface_scaling_config_t instead of the global g_cfg.video.* values. The rsx::thread
+	// holds the current config (populated from g_cfg) and surfaces snapshot it at creation,
+	// so behaviour matches the global path while keeping the upstream per-surface structure.
+	template <bool clamp = false>
+	static inline const std::pair<u16, u16> apply_resolution_scale(
+		const surface_scaling_config_t& config,
+		u16 width,
+		u16 height,
+		u16 ref_width = 0,
+		u16 ref_height = 0)
+	{
+		ref_width = (ref_width) ? ref_width : width;
+		ref_height = (ref_height) ? ref_height : height;
+		const u16 ref = std::max(ref_width, ref_height);
+
+		if (ref > config.min_scalable_dimension)
+		{
+			// Upscale both width and height
+			width = (config.scale_percent * width) / 100;
+			height = (config.scale_percent * height) / 100;
+
+			if constexpr (clamp)
+			{
+				width = std::max<u16>(width, 1);
+				height = std::max<u16>(height, 1);
+			}
+		}
+
+		return { width, height };
+	}
+
+	template <bool clamp = false>
+	static inline const std::pair<u16, u16> apply_inverse_resolution_scale(
+		const surface_scaling_config_t& config,
+		u16 width,
+		u16 height)
+	{
+		// Inverse scale
+		auto width_ = (width * 100) / config.scale_percent;
+		auto height_ = (height * 100) / config.scale_percent;
+
+		if constexpr (clamp)
+		{
+			width_ = std::max<u16>(width_, 1);
+			height_ = std::max<u16>(height_, 1);
+		}
+
+		if (std::max(width_, height_) > config.min_scalable_dimension)
+		{
+			return { width_, height_ };
+		}
+
+		return { width, height };
 	}
 
 	/**

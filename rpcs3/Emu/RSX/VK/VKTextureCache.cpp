@@ -403,7 +403,7 @@ namespace vk
 		m_cached_memory_size = 0;
 	}
 
-	void texture_cache::copy_transfer_regions_impl(vk::command_buffer& cmd, vk::image* dst, const std::vector<copy_region_descriptor>& sections_to_transfer) const
+	void texture_cache::copy_transfer_regions_impl(vk::command_buffer& cmd, vk::image* dst, const rsx::simple_array<copy_region_descriptor>& sections_to_transfer) const
 	{
 		const auto dst_aspect = dst->aspect();
 		const auto dst_bpp = vk::get_format_texel_width(dst->format());
@@ -590,7 +590,7 @@ namespace vk
 		return mapping;
 	}
 
-	vk::image* texture_cache::get_template_from_collection_impl(const std::vector<copy_region_descriptor>& sections_to_transfer) const
+	vk::image* texture_cache::get_template_from_collection_impl(const rsx::simple_array<copy_region_descriptor>& sections_to_transfer) const
 	{
 		if (sections_to_transfer.size() == 1) [[likely]]
 		{
@@ -719,7 +719,7 @@ namespace vk
 
 		if (copy)
 		{
-			std::vector<copy_region_descriptor> region =
+			rsx::simple_array<copy_region_descriptor> region =
 				{{.src = source,
 					.xform = rsx::surface_transform::coordinate_transform,
 					.src_x = x,
@@ -753,7 +753,7 @@ namespace vk
 	}
 
 	vk::image_view* texture_cache::generate_cubemap_from_images(vk::command_buffer& cmd, u32 gcm_format, u16 size,
-		const std::vector<copy_region_descriptor>& sections_to_copy, const rsx::texture_channel_remap_t& remap_vector)
+		const rsx::simple_array<copy_region_descriptor>& sections_to_copy, const rsx::texture_channel_remap_t& remap_vector)
 	{
 		auto _template = get_template_from_collection_impl(sections_to_copy);
 		auto result = create_temporary_subresource_view_impl(cmd, _template, VK_IMAGE_TYPE_2D,
@@ -796,7 +796,7 @@ namespace vk
 	}
 
 	vk::image_view* texture_cache::generate_3d_from_2d_images(vk::command_buffer& cmd, u32 gcm_format, u16 width, u16 height, u16 depth,
-		const std::vector<copy_region_descriptor>& sections_to_copy, const rsx::texture_channel_remap_t& remap_vector)
+		const rsx::simple_array<copy_region_descriptor>& sections_to_copy, const rsx::texture_channel_remap_t& remap_vector)
 	{
 		auto _template = get_template_from_collection_impl(sections_to_copy);
 		auto result = create_temporary_subresource_view_impl(cmd, _template, VK_IMAGE_TYPE_3D,
@@ -839,7 +839,7 @@ namespace vk
 	}
 
 	vk::image_view* texture_cache::generate_atlas_from_images(vk::command_buffer& cmd, u32 gcm_format, u16 width, u16 height,
-		const std::vector<copy_region_descriptor>& sections_to_copy, const rsx::texture_channel_remap_t& remap_vector)
+		const rsx::simple_array<copy_region_descriptor>& sections_to_copy, const rsx::texture_channel_remap_t& remap_vector)
 	{
 		auto _template = get_template_from_collection_impl(sections_to_copy);
 		auto result = create_temporary_subresource_view_impl(cmd, _template, VK_IMAGE_TYPE_2D,
@@ -885,7 +885,7 @@ namespace vk
 	}
 
 	vk::image_view* texture_cache::generate_2d_mipmaps_from_images(vk::command_buffer& cmd, u32 gcm_format, u16 width, u16 height,
-		const std::vector<copy_region_descriptor>& sections_to_copy, const rsx::texture_channel_remap_t& remap_vector)
+		const rsx::simple_array<copy_region_descriptor>& sections_to_copy, const rsx::texture_channel_remap_t& remap_vector)
 	{
 		const auto mipmaps = ::narrow<u8>(sections_to_copy.size());
 		auto _template = get_template_from_collection_impl(sections_to_copy);
@@ -940,7 +940,7 @@ namespace vk
 
 	void texture_cache::update_image_contents(vk::command_buffer& cmd, vk::image_view* dst_view, vk::image* src, u16 width, u16 height)
 	{
-		std::vector<copy_region_descriptor> region =
+		rsx::simple_array<copy_region_descriptor> region =
 			{{.src = src,
 				.xform = rsx::surface_transform::identity,
 				.src_w = width,

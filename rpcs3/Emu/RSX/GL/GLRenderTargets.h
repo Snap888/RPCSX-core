@@ -144,10 +144,11 @@ struct gl_render_target_traits
 		u32 address,
 		rsx::surface_color_format surface_color_format,
 		usz width, usz height, usz pitch,
-		rsx::surface_antialiasing antialias)
+		rsx::surface_antialiasing antialias,
+		const rsx::surface_scaling_config_t& resolution_scaling_config)
 	{
 		auto format = rsx::internals::surface_color_format_to_gl(surface_color_format);
-		const auto [width_, height_] = rsx::apply_resolution_scale<true>(static_cast<u16>(width), static_cast<u16>(height));
+		const auto [width_, height_] = rsx::apply_resolution_scale<true>(resolution_scaling_config, static_cast<u16>(width), static_cast<u16>(height));
 
 		u8 samples;
 		rsx::surface_sample_layout sample_layout;
@@ -166,6 +167,7 @@ struct gl_render_target_traits
 			static_cast<GLenum>(format.internal_format), RSX_FORMAT_CLASS_COLOR));
 
 		result->set_aa_mode(antialias);
+		result->set_resolution_scaling_config(resolution_scaling_config);
 		result->set_native_pitch(static_cast<u32>(width) * get_format_block_size_in_bytes(surface_color_format) * result->samples_x);
 		result->set_surface_dimensions(static_cast<u16>(width), static_cast<u16>(height), static_cast<u32>(pitch));
 		result->set_format(surface_color_format);
@@ -185,10 +187,11 @@ struct gl_render_target_traits
 		u32 address,
 		rsx::surface_depth_format2 surface_depth_format,
 		usz width, usz height, usz pitch,
-		rsx::surface_antialiasing antialias)
+		rsx::surface_antialiasing antialias,
+		const rsx::surface_scaling_config_t& resolution_scaling_config)
 	{
 		auto format = rsx::internals::surface_depth_format_to_gl(surface_depth_format);
-		const auto [width_, height_] = rsx::apply_resolution_scale<true>(static_cast<u16>(width), static_cast<u16>(height));
+		const auto [width_, height_] = rsx::apply_resolution_scale<true>(resolution_scaling_config, static_cast<u16>(width), static_cast<u16>(height));
 
 		u8 samples;
 		rsx::surface_sample_layout sample_layout;
@@ -207,6 +210,7 @@ struct gl_render_target_traits
 			static_cast<GLenum>(format.internal_format), rsx::classify_format(surface_depth_format)));
 
 		result->set_aa_mode(antialias);
+		result->set_resolution_scaling_config(resolution_scaling_config);
 		result->set_surface_dimensions(static_cast<u16>(width), static_cast<u16>(height), static_cast<u32>(pitch));
 		result->set_format(surface_depth_format);
 		result->set_native_pitch(static_cast<u32>(width) * get_format_block_size_in_bytes(surface_depth_format) * result->samples_x);
@@ -225,7 +229,8 @@ struct gl_render_target_traits
 	static void clone_surface(
 		gl::command_context& cmd,
 		std::unique_ptr<gl::render_target>& sink, gl::render_target* ref,
-		u32 address, barrier_descriptor_t& prev)
+		u32 address, barrier_descriptor_t& prev,
+		const rsx::surface_scaling_config_t& scaling_config)
 	{
 		if (!sink)
 		{
@@ -245,6 +250,7 @@ struct gl_render_target_traits
 			sink->set_rsx_pitch(ref->get_rsx_pitch());
 			sink->set_surface_dimensions(prev.width, prev.height, ref->get_rsx_pitch());
 			sink->set_native_component_layout(ref->get_native_component_layout());
+			sink->resolution_scaling_config = scaling_config;
 			sink->queue_tag(address);
 		}
 
@@ -362,6 +368,7 @@ struct gl_render_target_traits
 		gl::texture::internal_format format,
 		usz width, usz height,
 		rsx::surface_antialiasing antialias,
+		const rsx::surface_scaling_config_t& scaling_config,
 		bool check_refs = false)
 	{
 		if (check_refs && surface->has_refs())
@@ -369,7 +376,8 @@ struct gl_render_target_traits
 
 		return surface->get_internal_format() == format &&
 		       surface->get_spp() == get_format_sample_count(antialias) &&
-		       surface->matches_dimensions(static_cast<u16>(width), static_cast<u16>(height));
+		       surface->matches_dimensions(static_cast<u16>(width), static_cast<u16>(height)) &&
+		       surface->resolution_scaling_config == scaling_config;
 	}
 
 	static bool surface_matches_properties(
@@ -377,10 +385,11 @@ struct gl_render_target_traits
 		rsx::surface_color_format format,
 		usz width, usz height,
 		rsx::surface_antialiasing antialias,
+		const rsx::surface_scaling_config_t& scaling_config,
 		bool check_refs = false)
 	{
 		const auto internal_fmt = rsx::internals::surface_color_format_to_gl(format).internal_format;
-		return int_surface_matches_properties(surface, internal_fmt, width, height, antialias, check_refs);
+		return int_surface_matches_properties(surface, internal_fmt, width, height, antialias, scaling_config, check_refs);
 	}
 
 	static bool surface_matches_properties(
@@ -388,10 +397,11 @@ struct gl_render_target_traits
 		rsx::surface_depth_format2 format,
 		usz width, usz height,
 		rsx::surface_antialiasing antialias,
+		const rsx::surface_scaling_config_t& scaling_config,
 		bool check_refs = false)
 	{
 		const auto internal_fmt = rsx::internals::surface_depth_format_to_gl(format).internal_format;
-		return int_surface_matches_properties(surface, internal_fmt, width, height, antialias, check_refs);
+		return int_surface_matches_properties(surface, internal_fmt, width, height, antialias, scaling_config, check_refs);
 	}
 
 	static void spill_buffer(std::unique_ptr<gl::buffer>& /*bo*/)
