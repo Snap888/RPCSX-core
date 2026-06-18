@@ -2123,6 +2123,21 @@ namespace rsx
 			current_fragment_program.texcoord_control_mask |= u32(method_registers.point_sprite_control_mask()) << 16;
 		}
 
+#ifdef __ANDROID__
+		// [shadowtest] DECISIVE EXPERIMENT (REMOVE after answer): the col0/alpha-test
+		// hypothesis says alpha-tested depth-only shadow casters discard nondeterministically
+		// because col0.a is not reliably defined, dropping the head/legs/arms/weapon shadows
+		// (torso is opaque, never discards). Suppress the col0-reading discards in depth-only
+		// passes only (mrt_buffers_count == 0): if the full character shadow becomes solid,
+		// the alpha-test discard mechanism is CONFIRMED and the proper fix is to define col0;
+		// if nothing changes, the cause is elsewhere (surface-cache coherency / occlusion).
+		// Color passes are untouched, so vegetation / alpha-tested rendering is unaffected.
+		if (current_fragment_program.mrt_buffers_count == 0)
+		{
+			current_fragment_program.ctrl &= ~(RSX_SHADER_CONTROL_ALPHA_TEST | RSX_SHADER_CONTROL_ALPHA_TO_COVERAGE);
+		}
+#endif
+
 		// Check if framebuffer is actually an XRGB format and not a WZYX format
 		switch (m_ctx->register_state->surface_color())
 		{
