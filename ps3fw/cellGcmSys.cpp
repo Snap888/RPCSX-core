@@ -140,7 +140,7 @@ u32 cellGcmGetLabelAddress(u8 index)
 
 vm::ptr<CellGcmReportData> cellGcmGetReportDataAddressLocation(u32 index, u32 location)
 {
-	cellGcmSys.warning("cellGcmGetReportDataAddressLocation(index=%d, location=%d)", index, location);
+	cellGcmSys.trace("cellGcmGetReportDataAddressLocation(index=%d, location=%d)", index, location);
 
 	if (location == CELL_GCM_LOCATION_MAIN)
 	{
@@ -243,7 +243,7 @@ u32 cellGcmGetReportDataLocation(u32 index, u32 location)
 
 u64 cellGcmGetTimeStampLocation(u32 index, u32 location)
 {
-	cellGcmSys.warning("cellGcmGetTimeStampLocation(index=%d, location=%d)", index, location);
+	cellGcmSys.trace("cellGcmGetTimeStampLocation(index=%d, location=%d)", index, location);
 
 	// NOTE: No error checkings
 	return cellGcmGetReportDataAddressLocation(index, location)->timer;
