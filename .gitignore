@@ -71,3 +71,6 @@ tty.txt
 .claude/
 release-*/
 *.apk
+
+# Vendored protobuf source clone (build dependency, fetched separately, not tracked)
+/3rdparty/protobuf/protobuf/
