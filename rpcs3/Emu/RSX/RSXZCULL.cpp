@@ -468,6 +468,7 @@ namespace rsx
 					if (implemented && !have_result && query->num_draws)
 					{
 						get_occlusion_query_result(query);
+						rsx::g_perf_zcull_readbacks++;
 						counter.result += query->result;
 					}
 					else
@@ -612,6 +613,7 @@ namespace rsx
 					else if (force_read || check_occlusion_query_status(query))
 					{
 						get_occlusion_query_result(query);
+						rsx::g_perf_zcull_readbacks++;
 						counter.result += query->result;
 					}
 					else

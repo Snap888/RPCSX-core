@@ -1633,6 +1633,7 @@ namespace rsx
 			// the readback stall is inherent, but the warning-level string-format + log I/O is pure
 			// overhead during the exact jitter window. Kept at trace so it is free unless explicitly enabled.
 			rsx_log.trace("Cache miss at address 0x%X. This is gonna hurt...", get_section_base());
+			rsx::g_perf_texture_readbacks++;
 			m_tex_cache->on_miss(*derived());
 		}
 

@@ -551,8 +551,13 @@ namespace rsx
 							m_ft_min, m_ft_max, m_ft_hitches, m_ft_samples);
 					}
 
-					rsx_log.notice("Perf: %.1f fps | frametime %.1f ms%s | CPU %.0f%% | RSX-load %.0f%%",
-						m_fps, (m_frametime > 0.f ? m_frametime : (m_fps > 0.f ? 1000.f / m_fps : 0.f)), ft_detail.c_str(), m_cpu_usage, m_rsx_load);
+					// Attribute the hitches to their sync source: occlusion-query (ZCULL) readbacks
+					// vs texture/color-buffer (WCB) readback faults over the interval.
+					const u32 zcull_rb = rsx::g_perf_zcull_readbacks.exchange(0);
+					const u32 tex_rb = rsx::g_perf_texture_readbacks.exchange(0);
+
+					rsx_log.notice("Perf: %.1f fps | frametime %.1f ms%s | CPU %.0f%% | RSX-load %.0f%% | zcull-rb %u | tex-rb %u",
+						m_fps, (m_frametime > 0.f ? m_frametime : (m_fps > 0.f ? 1000.f / m_fps : 0.f)), ft_detail.c_str(), m_cpu_usage, m_rsx_load, zcull_rb, tex_rb);
 
 					m_ft_min = m_ft_max = 0.f;
 					m_ft_samples = m_ft_hitches = 0;
