@@ -670,6 +670,21 @@ void VKGSRender::flip(const rsx::display_flip_info_t& info)
 		vk::change_image_layout(*m_current_command_buffer, target_image, present_layout, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, subresource_range);
 		VK_GET_SYMBOL(vkCmdClearColorImage)(*m_current_command_buffer, target_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clear_black, 1, &subresource_range);
 
+		// Prevent WAW hazard when the window size exceeds the output draw box (upstream 9b09fba81):
+		// the upscaler's scale_output writes the same image right after this clear with no barrier
+		// between the two transfer writes, which on tile-based GPUs (Turnip) can flicker the letterbox
+		// bars. The image is in TRANSFER_DST_OPTIMAL here (just cleared), so use that for both layouts.
+		vk::insert_image_memory_barrier(
+			*m_current_command_buffer,
+			target_image,
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			VK_PIPELINE_STAGE_TRANSFER_BIT,
+			VK_PIPELINE_STAGE_TRANSFER_BIT,
+			VK_ACCESS_TRANSFER_WRITE_BIT,
+			VK_ACCESS_TRANSFER_WRITE_BIT,
+			subresource_range);
+
 		target_layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 	}
 
