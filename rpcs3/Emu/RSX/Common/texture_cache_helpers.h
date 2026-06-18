@@ -152,6 +152,23 @@ namespace rsx
 			return gcm_format;
 		}
 
+		// Promote a unorm depth gcm format to its float variant of identical byte width.
+		// Used when a unorm depth texture descriptor aliases a float depth render target:
+		// the surface cache must keep the float target so the extended depth range survives
+		// the copy instead of being remapped into unorm [0,1].
+		static inline u32 get_compatible_depth_float_format(u32 gcm_format)
+		{
+			switch (gcm_format)
+			{
+			case CELL_GCM_TEXTURE_DEPTH24_D8:
+				return CELL_GCM_TEXTURE_DEPTH24_D8_FLOAT;
+			case CELL_GCM_TEXTURE_DEPTH16:
+				return CELL_GCM_TEXTURE_DEPTH16_FLOAT;
+			default:
+				return gcm_format;
+			}
+		}
+
 		static inline u32 get_sized_blit_format(bool is_32_bit, bool depth_format, bool /*is_format_convert*/)
 		{
 			if (is_32_bit)
