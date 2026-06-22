@@ -225,6 +225,22 @@ namespace vk
 		return key.encoded;
 	}
 
+	u64 get_renderpass_key(VkFormat color_format, VkFormat depth_format)
+	{
+		// Compute a renderpass key for a color attachment (index 0) plus a depth attachment (index 1).
+		// Mirrors the single-format encoder above for the combined case.
+		renderpass_key_blob key(0);
+		key.sample_count = 1;
+
+		key.color_format = static_cast<u64>(color_format);
+		key.set_layout(0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+		key.depth_format = static_cast<u64>(depth_format);
+		key.set_layout(1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+
+		return key.encoded;
+	}
+
 	VkRenderPass get_renderpass(VkDevice dev, u64 renderpass_key)
 	{
 		// 99.999% of checks will go through this block once on-disk shader cache has loaded

@@ -628,6 +628,12 @@ VKGSRender::VKGSRender(utils::serial* ar) noexcept : GSRender(ar)
 	if (shadermode == shader_mode::async_with_interpreter || shadermode == shader_mode::interpreter_only)
 	{
 		m_shader_interpreter.init(*m_device);
+		// NOTE: preload() is intentionally NOT called here. This ctor runs (via
+		// named_thread's Context construction) on the emu boot thread, BEFORE the RSX
+		// thread is spawned and before the Vulkan device is fully live. preload()'s
+		// block-drain there parks the boot thread forever -> Android ANR / black
+		// screen. It is invoked from on_init_thread() (RSX thread, device up,
+		// pipe-compiler workers running) where the drain actually completes.
 	}
 
 	backend_config.supports_multidraw = true;
@@ -1372,6 +1378,16 @@ void VKGSRender::on_init_thread()
 
 		// TODO: Handle window resize messages during loading on GPUs without OUT_OF_DATE_KHR support
 		m_shaders_cache->load(&dlg, m_pipeline_layout);
+	}
+
+	// Precompile the base interpreter pipeline variants HERE - on the RSX thread,
+	// with the device fully initialized and the pipe-compiler workers running - not
+	// in the ctor (boot thread, pre-RSX, pre-device), where preload()'s block-drain
+	// deadlocked into an ANR. Only in the interpreter shader modes (smooth shaders).
+	if (const auto smode = g_cfg.video.shadermode.get();
+		smode == shader_mode::async_with_interpreter || smode == shader_mode::interpreter_only)
+	{
+		m_shader_interpreter.preload();
 	}
 }
 

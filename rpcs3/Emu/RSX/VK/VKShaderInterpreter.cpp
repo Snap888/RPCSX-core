@@ -10,6 +10,9 @@
 #include "VKHelpers.h"
 #include "VKRenderPass.h"
 
+#include <chrono>
+#include <thread>
+
 namespace vk
 {
 	glsl::shader* shader_interpreter::build_vs(u64 compiler_options)
@@ -382,6 +385,7 @@ namespace vk
 
 	void shader_interpreter::destroy()
 	{
+		m_current_interpreter.reset();
 		m_program_cache.clear();
 		m_descriptor_pool.destroy();
 
@@ -406,7 +410,7 @@ namespace vk
 		}
 	}
 
-	glsl::program* shader_interpreter::link(const vk::pipeline_props& properties, u64 compiler_opt)
+	std::shared_ptr<glsl::program> shader_interpreter::link(const vk::pipeline_props& properties, u64 compiler_opt, bool async, std::function<void()> async_done)
 	{
 		glsl::shader *fs, *vs;
 		if (auto found = m_shader_cache.find(compiler_opt); found != m_shader_cache.end())
@@ -418,6 +422,67 @@ namespace vk
 		{
 			fs = build_fs(compiler_opt);
 			vs = build_vs(compiler_opt);
+		}
+
+		if (async)
+		{
+			// Async path: rebuild the pipeline from props on a worker thread (module-based deferred overload).
+			// The fs/vs modules are already built/cached above; only the VkPipeline assembly is deferred.
+			VkShaderModule modules[2] = { vs->get_handle(), fs->get_handle() };
+
+			pipeline_key key{};
+			key.compiler_opt = compiler_opt;
+			key.properties = properties;
+
+			auto done = std::move(async_done);
+			auto callback = [this, key, done](std::unique_ptr<glsl::program>& prog)
+			{
+				// Runs on the pipe-compiler worker thread.
+				std::shared_ptr<glsl::program> result = std::move(prog);
+
+				std::lock_guard lock(m_program_cache_lock);
+				pipeline_cache_entry_t cache_entry;
+				cache_entry.program = result;
+				cache_entry.flags = 0;
+				m_program_cache[key] = std::move(cache_entry);
+
+				// Incremental compatible-variant seeding. As each base interpreter pipeline lands,
+				// map any full variant that is only *compatible* with this base (not an exact match)
+				// to a CACHED_PIPE_UNOPTIMIZED stand-in, so get() binds it immediately and async-
+				// upgrades it on first use. This replaces preload()'s former synchronous drain+seed,
+				// which parked the RSX thread (the smooth-shader hang). Naturally a no-op for exact
+				// recompile callbacks: no full variant's compatible-opt equals a full variant's exact opt.
+				const auto seed_variants = program_common::interpreter::get_interpreter_variants();
+				for (const auto& seed_variant : seed_variants.pipelines)
+				{
+					pipeline_key full_key;
+					full_key.properties = key.properties;
+					full_key.compiler_opt = seed_variant.vs_opts.shader_opt | seed_variant.fs_opts.shader_opt;
+
+					if (m_program_cache.count(full_key))
+					{
+						continue;
+					}
+
+					const u64 compat_opt = seed_variant.vs_opts.compatible_shader_opts | seed_variant.fs_opts.compatible_shader_opts;
+					if (compat_opt == key.compiler_opt)
+					{
+						pipeline_cache_entry_t stand_in;
+						stand_in.program = result;
+						stand_in.flags = program_common::interpreter::CACHED_PIPE_UNOPTIMIZED;
+						m_program_cache[full_key] = std::move(stand_in);
+					}
+				}
+
+				if (done)
+				{
+					done();
+				}
+			};
+
+			auto compiler = vk::get_pipe_compiler();
+			compiler->compile(properties, modules, m_shared_pipeline_layout, vk::pipe_compiler::COMPILE_DEFERRED, std::move(callback), m_vs_inputs, m_fs_inputs);
+			return nullptr;
 		}
 
 		VkPipelineShaderStageCreateInfo shader_stages[2] = {};
@@ -494,7 +559,7 @@ namespace vk
 
 		auto compiler = vk::get_pipe_compiler();
 		auto program = compiler->compile(info, m_shared_pipeline_layout, vk::pipe_compiler::COMPILE_INLINE, {}, m_vs_inputs, m_fs_inputs);
-		return program.release();
+		return std::shared_ptr<glsl::program>(std::move(program));
 	}
 
 	void shader_interpreter::update_fragment_textures(const std::array<VkDescriptorImageInfo, 68>& sampled_images, vk::descriptor_set& set)
@@ -569,28 +634,54 @@ namespace vk
 
 		if (m_current_key == key) [[likely]]
 		{
-			return m_current_interpreter;
+			return m_current_interpreter.get();
 		}
 		else
 		{
 			m_current_key = key;
 		}
 
-		auto found = m_program_cache.find(key);
-		if (found != m_program_cache.end()) [[likely]]
+		// Key changed (rare relative to the fast-path above), so an exclusive lock here is cheap.
+		// We may both read the cache and flip the RECOMPILING flag, so take the writer lock directly.
 		{
-			m_current_interpreter = found->second.get();
-			return m_current_interpreter;
+			std::lock_guard lock(m_program_cache_lock);
+
+			auto found = m_program_cache.find(key);
+			if (found != m_program_cache.end()) [[likely]]
+			{
+				m_current_interpreter = found->second.program;
+
+				// If this is a stand-in (unoptimized) variant and we haven't already kicked off the
+				// exact build, fire an async link. The compatible program stays bound (no stall) until
+				// the worker swaps the exact one into the cache.
+				if ((found->second.flags & (program_common::interpreter::CACHED_PIPE_UNOPTIMIZED | program_common::interpreter::CACHED_PIPE_RECOMPILING)) == program_common::interpreter::CACHED_PIPE_UNOPTIMIZED)
+				{
+					found->second.flags |= program_common::interpreter::CACHED_PIPE_RECOMPILING;
+					link(properties, key.compiler_opt, true, {});
+				}
+
+				return m_current_interpreter.get();
+			}
 		}
 
+		// Hard miss: build inline (this stalls, but the preload + compatible-variant fallback should
+		// make this rare in the interpreter shader modes).
 		m_current_interpreter = link(properties, key.compiler_opt);
-		m_program_cache[key].reset(m_current_interpreter);
-		return m_current_interpreter;
+
+		{
+			std::lock_guard lock(m_program_cache_lock);
+			pipeline_cache_entry_t cache_entry;
+			cache_entry.program = m_current_interpreter;
+			cache_entry.flags = 0;
+			m_program_cache[key] = std::move(cache_entry);
+		}
+
+		return m_current_interpreter.get();
 	}
 
 	bool shader_interpreter::is_interpreter(const glsl::program* prog) const
 	{
-		return prog == m_current_interpreter;
+		return prog == m_current_interpreter.get();
 	}
 
 	u32 shader_interpreter::get_vertex_instruction_location() const
@@ -601,5 +692,55 @@ namespace vk
 	u32 shader_interpreter::get_fragment_instruction_location() const
 	{
 		return m_fragment_instruction_start;
+	}
+
+	void shader_interpreter::preload()
+	{
+		// Precompile the base interpreter pipeline variants up-front (load-time, off the RSX hot path).
+		// Runs headless - no shader_loading_dialog is driven here.
+		std::vector<vk::pipeline_props> pipe_properties;
+		auto pdev = vk::get_current_renderer();
+
+		// Base pipeline - simple color
+		vk::pipeline_props base_props{};
+		base_props.state.set_attachment_count(1);
+		base_props.state.enable_cull_face(VK_CULL_MODE_BACK_BIT);
+		base_props.state.set_primitive_type(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+		base_props.state.set_color_mask(0, true, true, true, true);
+		base_props.state.set_attachment_count(1);
+		base_props.state.enable_depth_bias(true);
+		base_props.state.enable_depth_clamp(true);
+		base_props.state.enable_depth_bounds_test(pdev->get_depth_bounds_support());
+		base_props.renderpass_key = vk::get_renderpass_key(VK_FORMAT_B8G8R8A8_UNORM);
+		pipe_properties.push_back(base_props);
+
+		// Add in some blending
+		base_props.state.enable_blend(0,
+			VK_BLEND_FACTOR_SRC_ALPHA, VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+			VK_BLEND_FACTOR_SRC_ALPHA, VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+			VK_BLEND_OP_ADD, VK_BLEND_OP_ADD);
+		pipe_properties.push_back(base_props);
+
+		// Add a depth buffer
+		const auto depth_format = pdev->get_formats_support().d24_unorm_s8 ? VK_FORMAT_D24_UNORM_S8_UINT : VK_FORMAT_D32_SFLOAT_S8_UINT;
+		base_props.renderpass_key = vk::get_renderpass_key(VK_FORMAT_B8G8R8A8_UNORM, depth_format);
+		base_props.state.enable_depth_test(VK_COMPARE_OP_LESS);
+		base_props.state.set_depth_mask(true);
+		pipe_properties.push_back(base_props);
+
+		// Fire-and-forget: queue the base interpreter pipelines for async compilation and return
+		// immediately. We deliberately do NOT drain the queue here - blocking the RSX thread until
+		// the bases finish is exactly what parked flip/present and hung "smooth shaders" before.
+		// As each base lands on a pipe-compiler worker, its link() callback seeds the compatible
+		// full-variant stand-ins. A draw that arrives before its base is ready falls back to a
+		// single inline compile in get() (self-limiting, never a hang).
+		const auto variants = program_common::interpreter::get_interpreter_variants();
+		for (const auto& props : pipe_properties)
+		{
+			for (auto& variant : variants.base_pipelines)
+			{
+				link(props, variant.first | variant.second, true, {});
+			}
+		}
 	}
 }; // namespace vk

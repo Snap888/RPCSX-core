@@ -1,9 +1,13 @@
 #pragma once
 #include "Emu/RSX/VK/VKProgramPipeline.h"
 #include "Emu/RSX/Program/ProgramStateCache.h"
+#include "Emu/RSX/Program/ShaderInterpreter.h"
 #include "Emu/RSX/VK/VKPipelineCompiler.h"
 #include "vkutils/descriptors.h"
+#include "util/mutex.h"
 #include <unordered_map>
+#include <functional>
+#include <memory>
 
 namespace vk
 {
@@ -18,7 +22,10 @@ namespace vk
 		VkDevice m_device = VK_NULL_HANDLE;
 		VkDescriptorSetLayout m_shared_descriptor_layout = VK_NULL_HANDLE;
 		VkPipelineLayout m_shared_pipeline_layout = VK_NULL_HANDLE;
-		glsl::program* m_current_interpreter = nullptr;
+
+		// Holding a strong reference keeps the currently-bound base program alive even after an
+		// async recompile swaps the cache entry out from under us (UAF fix vs. the old raw pointer).
+		std::shared_ptr<glsl::program> m_current_interpreter;
 
 		struct pipeline_key
 		{
@@ -45,7 +52,14 @@ namespace vk
 			std::unique_ptr<glsl::shader> m_vs;
 		};
 
-		std::unordered_map<pipeline_key, std::unique_ptr<glsl::program>, key_hasher> m_program_cache;
+		struct pipeline_cache_entry_t
+		{
+			std::shared_ptr<glsl::program> program;
+			u32 flags = 0;
+		};
+
+		std::unordered_map<pipeline_key, pipeline_cache_entry_t, key_hasher> m_program_cache;
+		shared_mutex m_program_cache_lock;
 		std::unordered_map<u64, shader_cache_entry_t> m_shader_cache;
 		rsx::simple_array<VkDescriptorPoolSize> m_descriptor_pool_sizes;
 		vk::descriptor_pool m_descriptor_pool;
@@ -61,11 +75,12 @@ namespace vk
 
 		glsl::shader* build_vs(u64 compiler_opt);
 		glsl::shader* build_fs(u64 compiler_opt);
-		glsl::program* link(const vk::pipeline_props& properties, u64 compiler_opt);
+		std::shared_ptr<glsl::program> link(const vk::pipeline_props& properties, u64 compiler_opt, bool async = false, std::function<void()> async_done = {});
 
 	public:
 		void init(const vk::render_device& dev);
 		void destroy();
+		void preload();
 
 		glsl::program* get(
 			const vk::pipeline_props& properties,
