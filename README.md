@@ -114,7 +114,7 @@ or change from here. All credit for the emulator belongs to the **RPCS3** and
 - **ARM64 SPU stability**: stopped emitting fragile NEON tbl2/tbx2 (SPU register corruption); do not advertise SVE/SVE2 to LLVM (SPU miscompile); inline SPU decrementer via `CNTVCT_EL0` (Android-correct; `readcyclecounter` traps on most devices).
 - **PPU**: enabled LLVM IR optimization (EarlyCSE) on ARM (was x64-gated off); disabled the branch-folding loop that miscompiles (Asura's Wrath, RPCS3 #18287); analyser infinite-loop fix; 64-bit shift for SLDI; vector-NaN fixup default on; reservation compare size 127→128; PPU reservation priority over SPUs; fixed null dispatch for `adde.`/`subfe.` Rc-variants (latent interpreter crash).
 - **SPU correctness**: `spu_channel` occupy/wait bit-collision fix (Uncharted 2 SPURS hang); mis-ported cache-line waiter fix; restored dropped GPR-barrier guard in store elimination; double-check reservation data before PUTLLC writeback; full reservation-notification reimplementation; restored `COOPERATE_WITH_SYSTEM` guards; implemented `sys_spu_image_open_by_fd`.
-- **JIT**: targeting LLVM 19.1.7 to match upstream (see Tried/Reverted re: on-disk drift); versioned compiled-code caches (PPU `v9-kusa`) so codegen fixes reach existing installs; codegen targets the big/prime ARM core; ARM `busy_wait` scaled to the hardware timer; `isb` for pause.
+- **JIT**: built against LLVM 19.1.7 to match upstream; versioned compiled-code caches (PPU `v9-kusa`) so codegen fixes reach existing installs; codegen targets the big/prime ARM core; ARM `busy_wait` scaled to the hardware timer; `isb` for pause.
 - **vm**: skip read-only (SPU reservation-check) range locks when acquiring an exclusive writer lock (less over-synchronization on the reservation path).
 </details>
 
@@ -199,7 +199,6 @@ or change from here. All credit for the emulator belongs to the **RPCS3** and
 - **Cast-shadow attempts before the working fix** — receiver-side DEPTH_FLOAT/format_class coercion; col0 lane-completion; D32_SFLOAT compat-list widening; fp32 z-clip remap. All on-device tested and reverted; the eventual fix was suppressing the depth-only alpha-test discard.
 - **Dirty-flag re-specialization** — byte-matching upstream 0.0.41 here unmasks a fork-specific alpha-test discard that makes geometry vanish; kept on the fork's value. Lesson: "matches upstream" is not the same as "safe on this fork."
 - **SPU native-object disk cache** — versioned/keyed disk cache; wrote zero objects on-device across three investigations; removed (also an unbounded-storage concern).
-- **LLVM 19.1.7 switch** — set up in CMake and intended, but the flags did not persist in the build cache, so on-disk builds run **LLVM 20.1.3**.
 - **Eager pre-flush of all WCB targets (jitter)** — would remove the predictor's filter and risk fault churn on transient render targets; not certain to help, so not applied.
 </details>
 
