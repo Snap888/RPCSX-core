@@ -1,4 +1,8 @@
-# RPCSX-Clanker — core (experimental)
+<p align="center">
+  <img src=".github/icon.png" width="120" alt="RPCSX-Clanker icon">
+</p>
+
+<h1 align="center">RPCSX-Clanker — core <sub>(experimental)</sub></h1>
 
 The **PlayStation 3** emulation core (RPCS3-derived) used by the
 [RPCSX-Clanker Android app](https://github.com/Ouroboros420/rpcsx-ui-android),
@@ -12,9 +16,11 @@ side-by-side with official RPCSX.
 
 ## Two requests if you use this build
 
-This fork is **not original work** — the emulator itself is the work of the
-**RPCS3** and **RPCSX** teams. Only the Android porting and adaptation happens
-here, with heavy AI assistance. If this build is useful to you, please honour
+This is **not original work**. [**RPCS3**](https://rpcs3.net/) is the PlayStation 3
+emulator for desktop (PC / laptop). The unofficial **RPCSX** group ported RPCS3 to
+Android — but that port fell behind and is now running an outdated RPCS3 base. What
+this project does is bring the **latest RPCS3 changes into the RPCSX Android tree to
+update it**, with heavy AI assistance. If this build is useful to you, please honour
 these two things:
 
 ### 1. Donate to the teams who actually built the emulator
@@ -32,11 +38,12 @@ tree is done with heavy **AI assistance** (Claude). Treat it as **experimental**
 verify before relying on it, and expect rough edges.
 
 ### Why this exists
-Not to splinter off yet another permanent fork of the PS3 emulator. The goals are
-simply to **keep this Android build current** and to **help the real RPCSX / RPCS3
-teams** by showing what is possible on mobile — they are welcome to take any idea
-or change from here. All credit for the emulator belongs to the **RPCS3** and
-**RPCSX** developers.
+The RPCSX Android port is built on an older RPCS3 snapshot and had stopped tracking
+upstream, leaving Android a generation behind the desktop emulator. This project
+exists to **close that gap** — continuously porting current RPCS3 fixes and features
+into the RPCSX Android core. It is not a permanent splinter fork: all credit for the
+emulator belongs to the **RPCS3** and **RPCSX** developers, who are welcome to take
+anything useful from here.
 
 > Piracy is not permitted. Do not ask for games or system files.
 
