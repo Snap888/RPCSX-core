@@ -3589,13 +3589,14 @@ extern "C" void _rpcsx_rpcnSetEnabled(int enabled) {
     g_cfg.net.net_active.set(np_internet_status::enabled);
   } else {
     // Disable both PSN and Internet so the live config is fully offline (symmetric with the
-    // enable path). NOTE: a per-game custom config that pins net status overrides the global
-    // config at game boot, so a game already set to online via its per-game config keeps
-    // connecting until that per-game online setting is also cleared - and an already-open
-    // session is not torn down here. Full live disconnect + per-game override clearing is a
-    // separate, to-be-validated change.
+    // enable path), and gracefully tear down any live session so disabling takes effect
+    // immediately instead of only at the next game boot. NOTE: a per-game custom config that
+    // pins net status still overrides the global config at game boot, so a game set online via
+    // its per-game config keeps reconnecting until that per-game online setting is also cleared
+    // (global-authoritative-over-per-game override is a separate, larger change).
     g_cfg.net.psn_status.set(np_psn_status::disabled);
     g_cfg.net.net_active.set(np_internet_status::disabled);
+    rpcn::rpcn_client::terminate_active_session();
   }
   Emulator::SaveSettings(g_cfg.to_string(), "");
   rpcsx_android.notice("RPCN: %s", enabled ? "enabled" : "disabled");
@@ -3603,6 +3604,24 @@ extern "C" void _rpcsx_rpcnSetEnabled(int enabled) {
 
 extern "C" bool _rpcsx_rpcnIsEnabled() {
   return g_cfg.net.psn_status.get() == np_psn_status::psn_rpcn;
+}
+
+// Passive, non-blocking RPCN connection status for a live indicator. Reads the state of an
+// existing session WITHOUT creating a client or reconnecting (unlike _rpcsx_rpcnTestConnection).
+// Returns "online" (connected + authenticated), "connecting" (socket up, not yet authed), or
+// "offline" (no live session).
+extern "C" std::string _rpcsx_rpcnLiveStatus() {
+  auto client = rpcn::rpcn_client::get_active_instance();
+  if (!client) {
+    return "offline";
+  }
+  if (client->is_authentified()) {
+    return "online";
+  }
+  if (client->is_connected()) {
+    return "connecting";
+  }
+  return "offline";
 }
 
 extern "C" void *_rpcsx_setCustomDriver(void *driverHandle) {

@@ -290,6 +290,13 @@ namespace rpcn
 		rpcn_client(rpcn_client& other)    = delete;
 		void operator=(const rpcn_client&) = delete;
 		static std::shared_ptr<rpcn_client> get_instance(u32 binding_address, bool check_config = false);
+		// Get-only accessor: returns the live singleton if one exists, or nullptr. Unlike
+		// get_instance() it never creates a client (so a passive status poll / disable does not
+		// spin up a connection).
+		static std::shared_ptr<rpcn_client> get_active_instance();
+		// Gracefully terminate a live session (queued Terminate command; the disconnect then
+		// happens on the client's own reader/writer threads). No-op if no connected session.
+		static void terminate_active_session();
 		rpcn_state wait_for_connection();
 		rpcn_state wait_for_authentified();
 		bool terminate_connection();

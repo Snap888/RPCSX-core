@@ -378,6 +378,22 @@ namespace rpcn
 		return sptr;
 	}
 
+	std::shared_ptr<rpcn_client> rpcn_client::get_active_instance()
+	{
+		std::lock_guard lock(inst_mutex);
+		return instance.lock();
+	}
+
+	void rpcn_client::terminate_active_session()
+	{
+		// Grab a strong ref under the instance lock, then drop the lock before issuing the
+		// (queued) Terminate so we never hold inst_mutex across the packet-queue mutex.
+		if (auto sptr = get_active_instance(); sptr && sptr->is_connected())
+		{
+			sptr->terminate_connection();
+		}
+	}
+
 	// inform rpcn that the server infos have been updated and signal rpcn_thread to try again
 	void rpcn_client::server_infos_updated()
 	{
