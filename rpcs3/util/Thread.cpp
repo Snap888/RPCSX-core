@@ -113,7 +113,7 @@ thread_local u64 g_tls_fault_rsx = 0;
 thread_local u64 g_tls_fault_spu = 0;
 thread_local u64 g_tls_wait_time = 0;
 thread_local u64 g_tls_wait_fail = 0;
-thread_local bool g_tls_access_violation_recovered = false;
+thread_local u64 g_tls_access_violation_recovered = umax;
 extern thread_local std::string (*g_tls_log_prefix)();
 
 // Report error and call std::abort(), defined in main.cpp
