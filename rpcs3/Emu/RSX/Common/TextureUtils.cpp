@@ -253,7 +253,7 @@ namespace
 			}
 
 			const u32 size_in_block = padded_width * padded_height * depth * 2;
-			rsx::simple_array<U> tmp(size_in_block * words_per_block);
+			rsx::simple_array<U, sizeof(u128)> tmp(size_in_block * words_per_block);
 
 			switch (const u16 block_size = words_per_block * sizeof(T))
 			{
