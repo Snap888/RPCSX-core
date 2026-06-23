@@ -1537,6 +1537,13 @@ error_code sys_spu_thread_group_set_priority(ppu_thread &ppu, u32 id,
     return CELL_EINVAL;
   }
 
+  // System-cooperative (SPURS-managed) groups must not be re-prioritized by the
+  // guest - real PS3 rejects this with EINVAL. Matches our suspend/resume guards
+  // and upstream sys_spu_thread_group_set_priority; our snapshot dropped it here.
+  if (group->type & SYS_SPU_THREAD_GROUP_TYPE_COOPERATE_WITH_SYSTEM) {
+    return CELL_EINVAL;
+  }
+
   group->prio.atomic_op(
       [&](std::common_type_t<decltype(lv2_spu_group::prio)> &prio) {
         prio.prio = priority;
