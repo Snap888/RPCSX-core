@@ -1045,7 +1045,15 @@ error_code cellPadSetPortSetting(u32 port_no, u32 port_setting)
 	if (port_no >= CELL_PAD_MAX_PORT_NUM)
 		return CELL_OK;
 
-	config.port_setting[port_no] = port_setting;
+	if (port_setting & CELL_PAD_SETTING_PRESS_ON)
+		config.port_setting[port_no] |= CELL_PAD_SETTING_PRESS_ON;
+	else
+		config.port_setting[port_no] &= ~CELL_PAD_SETTING_PRESS_ON;
+
+	if (port_setting & CELL_PAD_SETTING_SENSOR_ON)
+		config.port_setting[port_no] |= CELL_PAD_SETTING_SENSOR_ON;
+	else
+		config.port_setting[port_no] &= ~CELL_PAD_SETTING_SENSOR_ON;
 
 	// can also return CELL_PAD_ERROR_UNSUPPORTED_GAMEPAD <- Update: seems to be just internal and ignored
 
