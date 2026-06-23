@@ -417,11 +417,18 @@ VKGSRender::VKGSRender(utils::serial* ar) noexcept : GSRender(ar)
 	// interpreter_only choices are kept. Session-only (the saved config is
 	// untouched). Done before the shadermode read below allocates interpreter
 	// buffers, so they are created when this kicks in. Toggleable from the app.
-	if (rpcs3::utils::get_smooth_shaders() && g_cfg.video.shadermode.get() == shader_mode::async_recompiler)
-	{
-		g_cfg.video.shadermode.set(shader_mode::async_with_interpreter);
-		rsx_log.notice("Android: smooth shaders on - using async_with_interpreter to avoid shader-compile stutter.");
-	}
+	// DISABLED: async_with_interpreter (the SPIR-V shader interpreter) has destabilised our
+	// Vulkan backend three times - two RSX-thread hangs and now a shared_mutex underflow at
+	// boot (the fire-and-forget preload callbacks racing the interpreter's program-cache lock,
+	// crash confirmed on Demon's Souls 2026.06.23). The default async_recompiler ("Async
+	// multi-threaded") already compiles shader pipelines on background worker threads and is
+	// stable, so smooth-shaders stays on it. The app toggle is left in place but is inert until
+	// a validated, lifetime-safe interpreter re-land. Do NOT re-enable without on-device proof.
+	// if (rpcs3::utils::get_smooth_shaders() && g_cfg.video.shadermode.get() == shader_mode::async_recompiler)
+	// {
+	// 	g_cfg.video.shadermode.set(shader_mode::async_with_interpreter);
+	// 	rsx_log.notice("Android: smooth shaders on - using async_with_interpreter to avoid shader-compile stutter.");
+	// }
 #endif
 
 	// Initialize dependencies
