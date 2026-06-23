@@ -578,13 +578,17 @@ std::string jit_compiler::cpu(const std::string& _cpu)
 			m_cpu = llvm::sys::getHostCPUName().str();
 		}
 
-		// Last-resort guard: if detection still lands on a tiny in-order core (LLVM
-		// reports these for some unknown SoCs), use a neutral out-of-order baseline
-		// instead - it can't be worse than ARMv8.0 / in-order scheduling for a device
-		// actually capable of running this emulator.
-		if (m_cpu.empty() || m_cpu == "cortex-a34" || m_cpu == "cortex-a35")
+		// Last-resort guard: if detection lands on "generic" or a tiny in-order core
+		// (LLVM reports these for unknown/new SoCs - e.g. 2nd-gen Oryon / Snapdragon
+		// 8 Elite resolves to "generic"), use a known modern out-of-order core as the
+		// schedule/cost-model baseline. CPU *features* come from setMAttrs (HWCAP-gated)
+		// independently, so this only affects scheduling and can never emit an illegal
+		// instruction - it is strictly better than ARMv8.0 "generic" on any device able
+		// to run this emulator. cortex-a78 (ARMv8.2-A, wide OoO) is LLVM-19-known and is
+		// already the fallback used below for the empty-MIDR path.
+		if (m_cpu.empty() || m_cpu == "cortex-a34" || m_cpu == "cortex-a35" || m_cpu == "generic")
 		{
-			m_cpu = "generic";
+			m_cpu = "cortex-a78";
 		}
 #else
 		m_cpu = llvm::sys::getHostCPUName().str();
