@@ -352,25 +352,35 @@ namespace vm
 
 		if constexpr (std::is_void_v<std::invoke_result_t<F, T&>>)
 		{
+			u64 old_time = umax;
 			{
 				vm::writer_lock lock(addr);
 				std::invoke(op, *sptr);
-				res += 127;
+				old_time = res.fetch_add(127);
 			}
 
 			if constexpr (Ack)
+			{
 				res.notify_all();
+				// Our SPU consumers park on the rtime-keyed reservation notifier
+				// (reservation_notifier_begin_wait), so notify_all() on the atomic alone
+				// leaves a PPU-produced -> SPU-consumed reservation update stranded until a
+				// multi-second timeout (the DBZ FMV / SPURS errno=110 stall). Upstream notifies
+				// the notifier here; mirror that so the consumer wakes immediately.
+				vm::reservation_notifier_notify(addr, old_time);
+			}
 			return;
 		}
 		else
 		{
+			u64 old_time = umax;
 			auto result = std::invoke_result_t<F, T&>();
 			{
 				vm::writer_lock lock(addr);
 
 				if ((result = std::invoke(op, *sptr)))
 				{
-					res += 127;
+					old_time = res.fetch_add(127);
 				}
 				else
 				{
@@ -379,7 +389,10 @@ namespace vm
 			}
 
 			if (Ack && result)
+			{
 				res.notify_all();
+				vm::reservation_notifier_notify(addr, old_time);
+			}
 			return result;
 		}
 	}
