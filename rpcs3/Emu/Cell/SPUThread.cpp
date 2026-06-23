@@ -7519,7 +7519,7 @@ bool spu_channel::push_wait(cpu_thread& spu, u32 value, bool push)
 		{
 			if (data & bit_count) [[unlikely]]
 			{
-				jostling_value.release(push ? (bit_occupy | value) : static_cast<u32>(data));
+				jostling_value.release(push ? value : static_cast<u32>(data));
 				data |= (push ? bit_occupy : 0) | bit_wait;
 			}
 			else if (push)
