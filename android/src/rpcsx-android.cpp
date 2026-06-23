@@ -3522,8 +3522,10 @@ extern "C" std::string _rpcsx_rpcnCreateAccount(std::string_view npid,
 
   // Derive once; create_user and the stored credential must use the same value.
   const std::string derived = rpcn::derive_password(password);
-  const auto error =
-      client->create_user(npid, derived, online_name, /*avatar_url*/ "", email);
+  // Match upstream rpcs3qt: send the default avatar URL, not an empty string,
+  // so the create packet is identical to the validated desktop client.
+  const auto error = client->create_user(npid, derived, online_name,
+                                         "https://rpcs3.net/cdn/netplay/DefaultAvatar.png", email);
   if (error != rpcn::ErrorType::NoError) {
     return rpcn_error_to_string(error);
   }
@@ -3559,8 +3561,27 @@ extern "C" std::string _rpcsx_rpcnResendToken() {
   return "";
 }
 
+// Persistent strong ref to the RPCN client. The singleton is held via a weak_ptr, so without a
+// strong ref it is destroyed the instant a JNI call returns - which is why the live status read
+// "offline" even right after a successful connection (the connected client was already gone).
+// Holding a ref while online is enabled keeps the authenticated connection alive for the status
+// poll, and lets a subsequently-booted game's NP handler reuse the live connection.
+static std::mutex g_rpcn_persistent_mutex;
+static std::shared_ptr<rpcn::rpcn_client> g_rpcn_persistent;
+
+static void rpcn_hold(std::shared_ptr<rpcn::rpcn_client> client) {
+  std::lock_guard lock(g_rpcn_persistent_mutex);
+  g_rpcn_persistent = std::move(client);
+}
+
+static void rpcn_release() {
+  std::lock_guard lock(g_rpcn_persistent_mutex);
+  g_rpcn_persistent.reset();
+}
+
 // Test the RPCN connection + authentication. Returns "" if both succeed,
-// else the human string for the failing state.
+// else the human string for the failing state. On success the connection is held alive so the
+// status indicator reflects it (and a later game reuses it) instead of dropping immediately.
 extern "C" std::string _rpcsx_rpcnTestConnection() {
   auto client = rpcn::rpcn_client::get_instance(0);
   if (!client) {
@@ -3578,6 +3599,7 @@ extern "C" std::string _rpcsx_rpcnTestConnection() {
     return rpcn::rpcn_state_to_string(state);
   }
 
+  rpcn_hold(client); // keep the now-connected client alive for the live status indicator
   return "";
 }
 
@@ -3587,6 +3609,7 @@ extern "C" void _rpcsx_rpcnSetEnabled(int enabled) {
   if (enabled) {
     g_cfg.net.psn_status.set(np_psn_status::psn_rpcn);
     g_cfg.net.net_active.set(np_internet_status::enabled);
+    rpcn_hold(rpcn::rpcn_client::get_instance(0)); // create + hold a live client (the app then connects it)
   } else {
     // Disable both PSN and Internet so the live config is fully offline (symmetric with the
     // enable path), and gracefully tear down any live session so disabling takes effect
@@ -3597,6 +3620,7 @@ extern "C" void _rpcsx_rpcnSetEnabled(int enabled) {
     g_cfg.net.psn_status.set(np_psn_status::disabled);
     g_cfg.net.net_active.set(np_internet_status::disabled);
     rpcn::rpcn_client::terminate_active_session();
+    rpcn_release(); // drop the persistent ref so the offline client is fully torn down
   }
   Emulator::SaveSettings(g_cfg.to_string(), "");
   rpcsx_android.notice("RPCN: %s", enabled ? "enabled" : "disabled");
