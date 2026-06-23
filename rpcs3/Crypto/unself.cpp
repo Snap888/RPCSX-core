@@ -890,7 +890,12 @@ bool SELFDecrypter::LoadHeaders(bool isElf32, SelfAdditionalInfo* out_info)
 		m_seg_ext_hdr.back().Load(self_f);
 	}
 
-	if (m_ext_hdr.version_hdr_offset == 0 || rx::add_saturate<u64>(m_ext_hdr.version_hdr_offset, sizeof(version_header)) > self_f.size())
+	if (m_ext_hdr.version_hdr_offset == 0)
+	{
+		// 0.85 Selfs have version_hdr_offset set to 0
+		m_version_hdr = {};
+	}
+	else if (rx::add_saturate<u64>(m_ext_hdr.version_hdr_offset, sizeof(version_header)) > self_f.size())
 	{
 		// Read out of bounds (file is truncated or corrupted)
 		return false;
