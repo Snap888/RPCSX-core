@@ -4039,11 +4039,6 @@ spu_program spu_recompiler_base::analyse(const be_t<u32>* ls, u32 entry_point, s
 		it++;
 	}
 
-	if (out_target_list)
-	{
-		out_target_list->insert(m_targets.begin(), m_targets.end());
-	}
-
 	// Remove unnecessary target lists
 	for (auto it = m_targets.begin(); it != m_targets.end();)
 	{
@@ -4057,7 +4052,12 @@ spu_program spu_recompiler_base::analyse(const be_t<u32>* ls, u32 entry_point, s
 
 		for (auto it2 = it->second.begin(); it2 != it->second.end();)
 		{
-			if (*it2 < lsa || *it2 >= limit)
+			// Drop targets out of range, OR pointing at a block that cleanup
+			// removed above (m_block_info cleared) - the dead in-range edges that
+			// otherwise leave dangling targets and abort the register-state walk
+			// with "Range check failed". Pruning them here keeps m_targets
+			// self-consistent.
+			if (*it2 < lsa || *it2 >= limit || !m_block_info[*it2 / 4])
 			{
 				it2 = it->second.erase(it2);
 				removed = true;
@@ -4074,6 +4074,14 @@ spu_program spu_recompiler_base::analyse(const be_t<u32>* ls, u32 entry_point, s
 
 		std::sort(it->second.begin(), it->second.end());
 		it++;
+	}
+
+	// Export the now-pruned, self-consistent target map AFTER the prune above, so
+	// callers don't see the dead in-range edges (or stale out-of-range keys) we
+	// just removed from m_targets.
+	if (out_target_list)
+	{
+		out_target_list->insert(m_targets.begin(), m_targets.end());
 	}
 
 	// Fill holes which contain only NOP and LNOP instructions (TODO: compile)
@@ -5312,6 +5320,14 @@ spu_program spu_recompiler_base::analyse(const be_t<u32>* ls, u32 entry_point, s
 
 	const auto initiate_patterns = [&](block_reg_state_iterator& block_state_it, u32 bpc, bool is_multi_block)
 	{
+		// Defense in depth: cleanup now prunes dead in-range edges from m_targets,
+		// but still skip a bpc whose block was removed (matches get_block_targets)
+		// so no consumer can deref a stale target (e.g. a stop-trap return).
+		if (!m_block_info[bpc / 4] || !m_bbs.count(bpc))
+		{
+			return;
+		}
+
 		// Initiate patterns (that are initiated on block start)
 		const auto& bb_body = ::at32(m_bbs, bpc);
 
@@ -5374,7 +5390,18 @@ spu_program spu_recompiler_base::analyse(const be_t<u32>* ls, u32 entry_point, s
 		{
 			targets_count = 0;
 
-			const u32 cond_next = block_pc + ::at32(m_bbs, block_pc).size * 4;
+			// Belt-and-suspenders: block_pc is a live m_bbs key only because the
+			// m_targets prune keeps dead edges out of block.targets; if that ever
+			// regressed, the ::at32 below would abort with the same "Range check
+			// failed" - bail cleanly instead of dereferencing a non-block.
+			const auto block_it = m_bbs.find(block_pc);
+			if (block_it == m_bbs.end() || !m_block_info[block_pc / 4])
+			{
+				invalid = true;
+				break;
+			}
+
+			const u32 cond_next = block_pc + block_it->second.size * 4;
 			valid = false;
 
 			bool is_end = false;
