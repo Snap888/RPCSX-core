@@ -566,7 +566,14 @@ namespace rpcn
 					}
 				}
 
-				if (authentified && !Emu.IsStopped())
+				// "ingame" must be Emu.IsRunning(), NOT merely !IsStopped(): during a game
+				// boot the status is starting/loading (not stopped) while Emulator::Init runs
+				// g_fxo->reset(), which destroys the p2p_context. The persistent RPCN client
+				// (Android fork) keeps this thread alive across boots; the signaling below does
+				// g_fxo->get<p2p_context>() and locks its list_p2p_ports_mutex - a use-after-
+				// free on a freed shared_mutex during boot (the Demon's Souls instant-crash with
+				// RPCN logged in). Only signal while a game is actually running, p2p_context live.
+				if (authentified && Emu.IsRunning())
 				{
 					// Ping the UDP Signaling Server if we're authentified & ingame
 					const auto now = steady_clock::now();
