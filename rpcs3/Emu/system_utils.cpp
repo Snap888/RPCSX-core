@@ -33,13 +33,15 @@ namespace rpcs3::utils
 		return g_compile_thread_cap.load(std::memory_order_relaxed);
 	}
 
-	// App-provided LLVM compile MEMORY budget in bytes (0 = unset). On Android,
-	// utils::get_total_memory() over-reports (sysconf counts zRAM pages), so the
-	// stock total/3 budget is far larger than what the process can actually
-	// allocate before the Low Memory Killer fires. The app derives a device-scaled,
-	// usable figure (ActivityManager) and pushes it here; the PPU compiler uses it
-	// as the concurrent-compile memory ceiling so large modules serialize instead
-	// of OOMing. See PPUThread.cpp.
+	// App-provided LLVM compile MEMORY budget in bytes (0 = unset). utils::get_total_memory()
+	// returns accurate PHYSICAL RAM (sysconf(_SC_PHYS_PAGES) = the kernel totalram; it does
+	// NOT count zRAM/swap - that is SwapTotal), so on an 8 GB device it is ~7 GiB, not
+	// inflated. The real problem is that a single Android process cannot safely allocate
+	// near all physical RAM before the per-process cgroup / Low Memory Killer limit kills it,
+	// so the stock total/3 budget is still far too loose. The app derives a device-scaled,
+	// per-process-safe figure (ActivityManager) and pushes it here; the PPU compiler uses it
+	// as the concurrent-compile memory ceiling so large modules serialize instead of OOMing.
+	// See PPUThread.cpp.
 	static std::atomic<u64> g_compile_memory_budget{0};
 
 	void set_compile_memory_budget(u64 bytes)

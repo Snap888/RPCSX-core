@@ -26,13 +26,14 @@ namespace rpcs3::utils
 	void set_compile_thread_cap(u32 cap);
 	u32 get_compile_thread_cap();
 
-	// Android compile MEMORY budget (bytes; 0 = unset). The PPU LLVM compiler uses
-	// this as the concurrent-compile memory ceiling instead of the unreliable
-	// get_total_memory()/3 (which over-reports on Android via zRAM page counting).
-	// The app pushes a device-scaled, usable figure via JNI. Sized below the
-	// largest expected single module so big modules serialize (one at a time) while
-	// small modules still compile concurrently - the OOM guard is the budget, not
-	// the thread count.
+	// Android compile MEMORY budget (bytes; 0 = unset). The PPU LLVM compiler uses this as
+	// the concurrent-compile memory ceiling instead of get_total_memory()/3. get_total_memory()
+	// is accurate physical RAM (no zRAM/swap inflation - sysconf counts totalram only), but a
+	// single Android process cannot allocate near all of it before the per-process / Low Memory
+	// Killer limit fires, so total/3 is too loose. The app pushes a device-scaled, per-process-
+	// safe figure via JNI. Sized below the largest expected single module so big modules
+	// serialize (one at a time) while small modules still compile concurrently - the OOM guard
+	// is the budget, not the thread count.
 	void set_compile_memory_budget(u64 bytes);
 	u64 get_compile_memory_budget();
 

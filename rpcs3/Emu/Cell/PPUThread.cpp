@@ -273,10 +273,11 @@ private:
 // Single source of truth for the LLVM PPU compile memory budget. concurent_memory_limit
 // uses it to throttle concurrent module compilation: a module whose estimate exceeds the
 // budget compiles solo (others wait via the solo-allocation escape), so peak memory stays
-// ~one big module instead of N. utils::get_total_memory() is unreliable on Android
-// (sysconf/_SC_PHYS_PAGES counts zRAM-backed pages, OVER-reporting far above what the
-// process can actually allocate before the Low Memory Killer fires), so we prefer the
-// app-pushed ActivityManager budget and otherwise cap conservatively. EVERY PPU-compile
+// ~one big module instead of N. utils::get_total_memory() returns accurate PHYSICAL RAM
+// (sysconf(_SC_PHYS_PAGES) = kernel totalram; it does NOT count zRAM/swap), but a single
+// Android process cannot allocate near all of it before the per-process cgroup / Low Memory
+// Killer limit fires, so total/3 is far too loose. We prefer the app-pushed ActivityManager
+// per-process-safe budget and otherwise cap conservatively at 1.5 GiB. EVERY PPU-compile
 // concurent_memory_limit MUST use this: a loose budget on any path (the old
 // get_total_memory()/2 in the public ppu_initialize overload) admits multiple ~1.6 GiB
 // modules concurrently and OOMs/segfaults first-time compiles (e.g. Skate 2, BLUS30253).

@@ -862,15 +862,17 @@ namespace vk
 		u64 vram_allocation_limit = g_cfg.video.vk.vram_allocation_limit * 0x100000ull;
 #ifdef ARCH_ARM64
 		// The default VRAM limit (65536 MB) is desktop-oriented and meaningless on a
-		// phone, where the Vulkan "device local" heap is shared system RAM AND is
-		// zRAM-over-reported (the driver counts zRAM pages): 2/3 of that figure is
-		// ~10 GB on an 8 GB device, so the texture/surface caches never evict and the
-		// Android Low Memory Killer silently kills the process (no fatal logged) in
-		// long sessions or large scene loads. When the user has NOT overridden the
-		// default, derive the budget from the app-pushed, ActivityManager.totalMem
-		// honest-physical-RAM figure (the same device-scaled budget the PPU compiler
-		// uses, on-device confirmed safe) rather than the inflated heap; fall back to
-		// a hard-capped heap fraction only if the app pushed nothing.
+		// phone, where the Vulkan "device local" heap is shared system RAM and the DRIVER
+		// reports an inflated heap size: on an 8 GB device the heap reports ~15 GB (2/3 of
+		// it is ~10 GB - already more than physical RAM), the driver over-reporting a
+		// virtual/swap-inclusive budget rather than usable RAM. (This is the GPU driver's
+		// heap figure - distinct from utils::get_total_memory(), which is accurate physical
+		// RAM.) With that inflated figure the texture/surface caches never evict and the
+		// Android Low Memory Killer silently kills the process (no fatal logged) in long
+		// sessions or large scene loads. When the user has NOT overridden the default, cap
+		// from the app-pushed, ActivityManager per-process-safe figure (the same device-
+		// scaled budget the PPU compiler uses, on-device confirmed safe) instead of the
+		// inflated heap; fall back to a hard-capped heap fraction only if the app pushed nothing.
 		if (g_cfg.video.vk.vram_allocation_limit == 65536) // untouched desktop default
 		{
 			if (const u64 honest_budget = rpcs3::utils::get_compile_memory_budget(); honest_budget != 0)
