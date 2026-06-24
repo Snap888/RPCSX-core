@@ -5456,7 +5456,10 @@ public:
 
 		const auto a = get_vr<s16[8]>(op.ra);
 
-#ifdef ARCH_ARM64
+		// GATED to the portable scalar byte-gather below - see the note in GBB. ARM64
+		// i8mm/dotprod gather is the only live ARM64-only SPU codegen path aps3e lacks
+		// (the SPU regfile-corruption / STOP 0x0 class). Re-enable: #ifdef ARCH_ARM64
+#if 0 // was: #ifdef ARCH_ARM64
 		if (m_use_i8mm)
 		{
 			if (match_vr<s16[8], s32[4], s64[2]>(op.ra, [&](auto c, auto MP)
@@ -5549,7 +5552,14 @@ public:
 	{
 		const auto a = get_vr<u8[16]>(op.ra);
 
-#ifdef ARCH_ARM64
+		// GATED to the portable scalar byte-gather below (the path stock RPCS3 and the
+		// working Android reference fork aps3e use). Our ARM64 i8mm (smmla/ummla) and
+		// dotprod (sdot/udot) gather + zshuffle is the ONLY live ARM64-only SPU codegen
+		// path aps3e lacks, and it matches the SPU regfile-corruption / STOP 0x0 class
+		// that keeps DBZ / TLOU / Uncharted from booting. Negligible perf cost (GBB is a
+		// rare bit-gather op). Re-enable once proven safe on-device by restoring the
+		// original directive: #ifdef ARCH_ARM64
+#if 0 // was: #ifdef ARCH_ARM64
 		if (m_use_i8mm)
 		{
 			if (match_vr<s8[16], s16[8], s32[4], s64[2]>(op.ra, [&](auto c, auto MP)
