@@ -709,11 +709,18 @@ namespace rsx
 			state_signals[NV4097_SET_POINT_SIZE] = rsx::vertex_state_dirty;
 			state_signals[NV4097_SET_ALPHA_FUNC] = rsx::fragment_state_dirty;
 			state_signals[NV4097_SET_ALPHA_REF] = rsx::fragment_state_dirty;
-			state_signals[NV4097_SET_ALPHA_TEST_ENABLE] = rsx::fragment_program_state_dirty;
+			// DO NOT "fix" these to fragment_program_state_dirty to match upstream.
+			// Re-specializing the fragment shader on alpha-test / shader-packer /
+			// polygon-stipple toggle UNMASKS an alpha-test specialization that discards
+			// character torsos on our Turnip/VK backend (the "missing torso" glitch) and
+			// adds shader-recompile stutter. On-device bisection pinned it to 0304a83f8;
+			// reverted in c6681c80d; re-broken in f5486e67c. Keep fragment_state_dirty so
+			// the cached shader stays valid and the geometry renders. Device result wins.
+			state_signals[NV4097_SET_ALPHA_TEST_ENABLE] = rsx::fragment_state_dirty;
 			// NV4097_SET_ANTI_ALIASING_CONTROL now has an explicit method handler
 			// (nv4097::set_aa_control); FIFO dispatch is method-OR-signal, so the
 			// signal here would be dead and only trips the boot sanity-check warning.
-			state_signals[NV4097_SET_SHADER_PACKER] = rsx::fragment_program_state_dirty;
+			state_signals[NV4097_SET_SHADER_PACKER] = rsx::fragment_state_dirty; // see torso note above
 			state_signals[NV4097_SET_SHADER_WINDOW] = rsx::fragment_state_dirty;
 			state_signals[NV4097_SET_FOG_MODE] = rsx::fragment_state_dirty;
 			state_signals[NV4097_SET_SCISSOR_HORIZONTAL] = rsx::scissor_config_state_dirty;
@@ -728,7 +735,7 @@ namespace rsx
 			state_signals[NV4097_SET_VIEWPORT_OFFSET + 0] = rsx::vertex_state_dirty;
 			state_signals[NV4097_SET_VIEWPORT_OFFSET + 1] = rsx::vertex_state_dirty;
 			state_signals[NV4097_SET_VIEWPORT_OFFSET + 2] = rsx::vertex_state_dirty;
-			state_signals[NV4097_SET_POLYGON_STIPPLE] = rsx::fragment_program_state_dirty;
+			state_signals[NV4097_SET_POLYGON_STIPPLE] = rsx::fragment_state_dirty; // see torso note above
 			state_signals[NV4097_SET_POLYGON_STIPPLE_PATTERN + 0] = rsx::polygon_stipple_pattern_dirty;
 			state_signals[NV4097_SET_POLYGON_STIPPLE_PATTERN + 1] = rsx::polygon_stipple_pattern_dirty;
 			state_signals[NV4097_SET_POLYGON_STIPPLE_PATTERN + 2] = rsx::polygon_stipple_pattern_dirty;
