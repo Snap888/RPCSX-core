@@ -270,6 +270,32 @@ private:
 	}
 };
 
+// Single source of truth for the LLVM PPU compile memory budget. concurent_memory_limit
+// uses it to throttle concurrent module compilation: a module whose estimate exceeds the
+// budget compiles solo (others wait via the solo-allocation escape), so peak memory stays
+// ~one big module instead of N. utils::get_total_memory() is unreliable on Android
+// (sysconf/_SC_PHYS_PAGES counts zRAM-backed pages, OVER-reporting far above what the
+// process can actually allocate before the Low Memory Killer fires), so we prefer the
+// app-pushed ActivityManager budget and otherwise cap conservatively. EVERY PPU-compile
+// concurent_memory_limit MUST use this: a loose budget on any path (the old
+// get_total_memory()/2 in the public ppu_initialize overload) admits multiple ~1.6 GiB
+// modules concurrently and OOMs/segfaults first-time compiles (e.g. Skate 2, BLUS30253).
+static u64 ppu_get_llvm_compile_budget()
+{
+	u64 compile_budget = utils::get_total_memory() / 3;
+#ifdef ANDROID
+	if (const u64 app_budget = rpcs3::utils::get_compile_memory_budget(); app_budget != 0)
+	{
+		compile_budget = std::min<u64>(compile_budget, app_budget);
+	}
+	else
+	{
+		compile_budget = std::min<u64>(compile_budget, 1536ull * 1024 * 1024);
+	}
+#endif
+	return compile_budget;
+}
+
 extern void ppu_initialize();
 extern void ppu_finalize(const ppu_module<lv2_obj>& info, bool force_mem_release = false);
 extern bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only = false, u64 file_size = 0);
@@ -4303,33 +4329,9 @@ extern void ppu_precompile(std::vector<std::string>& dir_queue, std::vector<ppu_
 
 	lf_queue<file_info> possible_exec_file_paths;
 
-	u64 compile_budget = utils::get_total_memory() / 3;
-#ifdef ANDROID
-	// utils::get_total_memory() is unreliable on Android: sysconf(_SC_PHYS_PAGES)
-	// counts zRAM-backed pages, so it OVER-reports (e.g. ~10.5 GiB on an 8 GB
-	// device). total/3 (~3.5 GiB) is then far larger than what the process can
-	// actually allocate for LLVM before the Low Memory Killer fires - two ~1.67 GB
-	// modules (Mafia II) fit that loose budget, compiled concurrently, and aborted
-	// (~3.3 GB peak -> bad_alloc).
-	//
-	// Prefer a real, device-scaled, usable budget pushed from the app (derived from
-	// ActivityManager, which - unlike sysconf - reflects actual RAM). If present,
-	// use it. Otherwise fall back to a corrected conservative cap. Either way the
-	// budget is sized BELOW the largest expected single module, so a worst-case big
-	// module trips concurent_memory_limit's solo-allocation escape (compiles alone
-	// while a second worker waits) and big modules serialize, while small modules
-	// still run concurrently. The OOM guard is this memory budget, not the thread
-	// cap (capping thread COUNT can't bound per-module RAM).
-	if (const u64 app_budget = rpcs3::utils::get_compile_memory_budget(); app_budget != 0)
-	{
-		compile_budget = std::min<u64>(compile_budget, app_budget);
-	}
-	else
-	{
-		compile_budget = std::min<u64>(compile_budget, 1536ull * 1024 * 1024);
-	}
-#endif
-	concurent_memory_limit memory_limit(compile_budget);
+	// Device-scaled, app-pushed budget (see ppu_get_llvm_compile_budget). Big modules
+	// serialize via the solo-allocation escape; small modules still run concurrently.
+	concurent_memory_limit memory_limit(ppu_get_llvm_compile_budget());
 
 	u32 software_thread_limit = std::min<u32>(g_cfg.core.llvm_threads ? g_cfg.core.llvm_threads : u32{umax}, ::size32(file_queue));
 	if (const u32 cap = rpcs3::utils::get_compile_thread_cap(); cap > 0)
@@ -5850,7 +5852,11 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 
 bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_size)
 {
-	concurent_memory_limit memory_limit(rx::aligned_div<u64>(utils::get_total_memory(), 2));
+	// MUST match the main precompile path's budget: was get_total_memory()/2 here, which
+	// is UNCLAMPED - on Android it admits ~2 concurrent ~1.6 GiB modules and OOMs/segfaults
+	// first-time compiles (Skate 2). The clamped budget makes an over-budget module compile
+	// solo (others wait), bounding peak compile memory to ~one module.
+	concurent_memory_limit memory_limit(ppu_get_llvm_compile_budget());
 	return ppu_initialize(info, check_only, file_size, memory_limit);
 }
 
