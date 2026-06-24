@@ -1432,7 +1432,13 @@ private:
 
     bool is_vsh = workload.path.ends_with("/vsh.self");
 
-    Emu.SetState(system_state::running);
+    // SetTestMode (not SetState(running)): this is an install-time precompile, NOT a real
+    // game. It forces m_state=running for the PPU/memory managers, but also raises
+    // IsTestMode() so the persistent RPCN thread stays off g_fxo while the g_fxo reset()
+    // and init<>() below tear down / rebuild the p2p_context. SetState(stopped) at the end
+    // of this function clears test mode again. (Fixes the install-finished native crash:
+    // RPCN thread locking a torn-down shared_mutex - mutex.cpp:89 imp_lock underflow.)
+    Emu.SetTestMode();
 
     MessageDialog::pushPendingProgressId(workload.progressId);
 

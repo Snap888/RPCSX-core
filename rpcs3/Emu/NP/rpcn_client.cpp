@@ -245,7 +245,9 @@ namespace rpcn
 		// Souls instant-crash with RPCN logged in). Only touch the overlay when a game is
 		// actually running and the display_manager is live; the friend state itself is
 		// still updated by the caller regardless.
-		if (!Emu.IsRunning())
+		// IsTestMode(): the install-time precompile forces IsRunning() true while g_fxo is
+		// being reset, so IsRunning() alone is not enough - skip the overlay then too.
+		if (!Emu.IsRunning() || Emu.IsTestMode())
 			return;
 
 		localized_string_id loc_id = localized_string_id::INVALID;
@@ -573,7 +575,12 @@ namespace rpcn
 				// g_fxo->get<p2p_context>() and locks its list_p2p_ports_mutex - a use-after-
 				// free on a freed shared_mutex during boot (the Demon's Souls instant-crash with
 				// RPCN logged in). Only signal while a game is actually running, p2p_context live.
-				if (authentified && Emu.IsRunning())
+				// && !IsTestMode(): the install-time precompile (rpcsx-android.cpp) forces
+				// IsRunning() true while it resets g_fxo, which would tear the p2p_context
+				// out from under get_rpcn_msgs()/send_packet_from_p2p_port() here = the
+				// install-finished crash (mutex.cpp:89 imp_lock underflow). Real games have
+				// IsTestMode()==false, so signaling still runs normally for them.
+				if (authentified && Emu.IsRunning() && !Emu.IsTestMode())
 				{
 					// Ping the UDP Signaling Server if we're authentified & ingame
 					const auto now = steady_clock::now();
