@@ -88,19 +88,8 @@ namespace rsx
 
 		enum constants
 		{
-#ifdef __ANDROID__
-			// Mobile-tiler tuning. The GPU completes occlusion queries in ~microseconds but is
-			// otherwise idle (sync-bound); the upstream desktop cadence leaves completed results
-			// unharvested for up to 300us, so the guest's Reports-area read force-drains them
-			// synchronously one-by-one (the per-frame ZCULL hitch under Accurate ZCULL stats).
-			// Harvest 4x more often and force-retire sooner so ready results are collected
-			// opportunistically (non-blocking) before the guest blocks on them.
-			max_zcull_delay_us = 100,     // Delay before a report update operation is forced to retire
-			min_zcull_tick_us = 25,       // Default tick duration. To avoid hardware spam, we schedule peeks in multiples of this.
-#else
 			max_zcull_delay_us = 300,     // Delay before a report update operation is forced to retire
 			min_zcull_tick_us = 100,      // Default tick duration. To avoid hardware spam, we schedule peeks in multiples of this.
-#endif
 			occlusion_query_count = 2048, // Number of occlusion query slots available. Real hardware actually has far fewer units before choking
 			max_safe_queue_depth = 1792,  // Number of in-flight queries before we start forcefully flushing data from the GPU device.
 			max_stat_registers = 8192     // Size of the statistics cache
