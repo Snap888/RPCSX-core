@@ -2314,6 +2314,13 @@ error_code sys_isolated_spu_create(ppu_thread &ppu, vm::ptr<u32> id,
   const auto thread =
       idm::make_ptr<named_thread<spu_thread>>(nullptr, index, "", index, true);
 
+  // Map the isolated SPU local store before it is used (upstream 7dce197ec). Mirrors the
+  // non-isolated sys_spu_thread_initialize path above; without it the isolated LS is never
+  // falloc'd/mapped, so the later deploy() writes to unmapped memory and crashes.
+  ensure(vm::get(vm::spu)->falloc(thread->vm_offset(), SPU_LS_SIZE, &thread->shm,
+                                  vm::page_size_64k));
+  thread->map_ls(*thread->shm, thread->ls);
+
   thread->gpr[3] = v128::from64(0, arg1);
   thread->gpr[4] = v128::from64(0, arg2);
   thread->gpr[5] = v128::from64(0, arg3);
