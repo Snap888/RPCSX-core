@@ -237,6 +237,17 @@ namespace rpcn
 		if (!g_cfg.misc.show_rpcn_popups)
 			return;
 
+		// The Android fork keeps the RPCN client (and its reader thread) alive across
+		// game boots via g_rpcn_persistent. A friend notification dispatching here while
+		// no game is running would call rsx::overlays::queue_message into the overlay
+		// display_manager - a g_fxo object that Emulator::Init destroys via g_fxo->reset()
+		// at boot - which is a use-after-free on its shared_mutex (the reported Demon's
+		// Souls instant-crash with RPCN logged in). Only touch the overlay when a game is
+		// actually running and the display_manager is live; the friend state itself is
+		// still updated by the caller regardless.
+		if (!Emu.IsRunning())
+			return;
+
 		localized_string_id loc_id = localized_string_id::INVALID;
 
 		switch (ntype)
