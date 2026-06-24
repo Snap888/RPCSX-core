@@ -2201,8 +2201,11 @@ game_boot_result Emulator::Load(const std::string& title_id, bool is_disc_patch,
 			}
 			else if (rpcs3::utils::version_is_bigger(game_fw_version, fw_version, m_title_id, true))
 			{
-				sys_log.error("The game's required firmware version is higher than the installed firmware's version. (title_id='%s', game_fw='%s', fw='%s')", m_title_id, game_fw_version, fw_version);
-				return game_boot_result::firmware_version;
+				// Do NOT hard-fail. The working Android reference fork aps3e has no firmware-
+				// version gate and boots these games - many over-declare PS3_SYSTEM_VER vs what
+				// they actually use. Warn and continue; a genuinely missing syscall surfaces its
+				// own error later. Raises boot rate for the "Firmware is too old" failures.
+				sys_log.warning("The game's required firmware version (%s) is higher than the installed firmware (%s); booting anyway. (title_id='%s')", game_fw_version, fw_version, m_title_id);
 			}
 		}
 
