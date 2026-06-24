@@ -2,6 +2,7 @@
 #include "instance.h"
 #include "util/logs.hpp"
 #include "Emu/system_config.h"
+#include "Emu/system_utils.hpp"
 
 namespace vk
 {
@@ -861,17 +862,26 @@ namespace vk
 		u64 vram_allocation_limit = g_cfg.video.vk.vram_allocation_limit * 0x100000ull;
 #ifdef ARCH_ARM64
 		// The default VRAM limit (65536 MB) is desktop-oriented and meaningless on a
-		// phone, where the Vulkan "device local" heap is shared system RAM: left at
-		// the default, the texture/surface caches are free to grow into all of it,
-		// starving the emulator + OS -> OOM / memory-corruption crashes in long
-		// sessions. When the user has NOT overridden the default, pick a mobile-sane
-		// budget (2/3 of detected memory) that scales to any device. An explicit
-		// user value is always honored (and, as on every platform, only capped to
-		// the physical heap by the std::min below).
+		// phone, where the Vulkan "device local" heap is shared system RAM AND is
+		// zRAM-over-reported (the driver counts zRAM pages): 2/3 of that figure is
+		// ~10 GB on an 8 GB device, so the texture/surface caches never evict and the
+		// Android Low Memory Killer silently kills the process (no fatal logged) in
+		// long sessions or large scene loads. When the user has NOT overridden the
+		// default, derive the budget from the app-pushed, ActivityManager.totalMem
+		// honest-physical-RAM figure (the same device-scaled budget the PPU compiler
+		// uses, on-device confirmed safe) rather than the inflated heap; fall back to
+		// a hard-capped heap fraction only if the app pushed nothing.
 		if (g_cfg.video.vk.vram_allocation_limit == 65536) // untouched desktop default
 		{
-			vram_allocation_limit = (memory_map.device_local_total_bytes / 3) * 2;
-			rsx_log.notice("Android: defaulting VRAM cache budget to %llu MB (2/3 of %llu MB detected); override via 'VRAM allocation limit (MB)'",
+			if (const u64 honest_budget = rpcs3::utils::get_compile_memory_budget(); honest_budget != 0)
+			{
+				vram_allocation_limit = honest_budget;
+			}
+			else
+			{
+				vram_allocation_limit = std::min<u64>((memory_map.device_local_total_bytes / 3) * 2, 2048ull * 0x100000ull);
+			}
+			rsx_log.notice("Android: VRAM cache budget = %llu MB (device-local heap reports %llu MB); override via 'VRAM allocation limit (MB)'",
 				vram_allocation_limit / 0x100000, memory_map.device_local_total_bytes / 0x100000);
 		}
 #endif
