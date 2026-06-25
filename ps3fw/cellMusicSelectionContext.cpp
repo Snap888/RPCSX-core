@@ -292,7 +292,7 @@ u32 music_selection_context::step_track(bool next)
 			{
 				// We are at the end of the playlist.
 				cellMusicSelectionContext.notice("No more tracks to play in playlist...");
-				current_track = umax;
+				current_track = ::narrow<u32>(playlist.size() - 1); // keep index in range (port f8a5a6ad9); the returned umax already signals end-of-content
 				return umax;
 			}
 		}
@@ -303,7 +303,7 @@ u32 music_selection_context::step_track(bool next)
 			{
 				// We are at the start of the playlist.
 				cellMusicSelectionContext.notice("No more tracks to play in playlist...");
-				current_track = umax;
+				// leave current_track at 0 (don't stomp it to umax) so a consumer's ::at32(playlist, current_track) can't go OOB (port 7c2bd5677)
 				return umax;
 			}
 
