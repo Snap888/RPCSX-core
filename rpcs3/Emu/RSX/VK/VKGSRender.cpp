@@ -667,7 +667,16 @@ VKGSRender::VKGSRender(utils::serial* ar) noexcept : GSRender(ar)
 	// Conditional rendering support
 	// Do not use on MVK due to a speedhack we rely on (streaming results without stopping the current renderpass)
 	// If we break the renderpasses, MVK loses around 75% of its performance in troublesome spots compared to just doing a CPU sync
-	backend_config.supports_hw_conditional_render = (vk::get_driver_vendor() != vk::driver_vendor::MVK);
+	//
+	// Also disabled on Adreno/Turnip: VK_EXT_conditional_rendering hangs the GPU
+	// (VK_ERROR_DEVICE_LOST - the RSX thread waits ~41s for an occlusion query that never
+	// completes) on conditional-render + video workloads (e.g. Skate 2 intro). Fall back to
+	// the CPU-side ZCULL path (the stock behaviour when the extension is absent), which is
+	// correct; pair with Relaxed ZCULL Sync to keep the readback off the critical path.
+	// Trade-off is limited to games that actually use NV4097_SET_RENDER_ENABLE.
+	backend_config.supports_hw_conditional_render =
+		(vk::get_driver_vendor() != vk::driver_vendor::MVK &&
+		 !vk::is_ADRENO(vk::get_driver_vendor()));
 
 	// Passthrough DMA
 	backend_config.supports_passthrough_dma = m_device->get_external_memory_host_support();
