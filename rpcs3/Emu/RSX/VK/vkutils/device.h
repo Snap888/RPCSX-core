@@ -145,6 +145,17 @@ namespace vk
 		VkQueue m_present_queue = VK_NULL_HANDLE;
 		VkQueue m_transfer_queue = VK_NULL_HANDLE;
 
+		// Optional driver pipeline cache (SPIR-V -> ISA). VK_NULL_HANDLE when disabled/failed.
+		// Created after vkCreateDevice in create(), serialized + destroyed before vkDestroyDevice in destroy().
+		VkPipelineCache m_pipeline_cache = VK_NULL_HANDLE;
+
+		// Build the on-disk path for the serialized pipeline cache blob (no game/title required).
+		std::string get_pipeline_cache_path() const;
+		// Create the pipeline cache, seeding it from a validated on-disk blob if present. Never fatal.
+		void load_pipeline_cache();
+		// Serialize the pipeline cache to disk (best-effort) and destroy it. Never fatal.
+		void save_and_destroy_pipeline_cache();
+
 		u32 m_graphics_queue_family = 0;
 		u32 m_present_queue_family = 0;
 		u32 m_transfer_queue_family = 0;
@@ -304,6 +315,13 @@ namespace vk
 		mem_allocator_base* get_allocator() const
 		{
 			return m_allocator.get();
+		}
+
+		// Shared driver pipeline cache. May legitimately be VK_NULL_HANDLE (disabled/unavailable),
+		// which is the exact value the create calls used before this feature -> safe to pass directly.
+		VkPipelineCache get_pipeline_cache() const
+		{
+			return m_pipeline_cache;
 		}
 
 		operator VkDevice() const

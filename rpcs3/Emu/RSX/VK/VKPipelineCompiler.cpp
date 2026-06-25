@@ -61,7 +61,7 @@ namespace vk
 	std::unique_ptr<glsl::program> pipe_compiler::int_compile_compute_pipe(const VkComputePipelineCreateInfo& create_info, VkPipelineLayout pipe_layout)
 	{
 		VkPipeline pipeline;
-		VK_GET_SYMBOL(vkCreateComputePipelines)(*g_render_device, nullptr, 1, &create_info, nullptr, &pipeline);
+		VK_GET_SYMBOL(vkCreateComputePipelines)(*g_render_device, g_render_device->get_pipeline_cache(), 1, &create_info, nullptr, &pipeline);
 		return std::make_unique<vk::glsl::program>(*m_device, pipeline, pipe_layout);
 	}
 
@@ -69,7 +69,7 @@ namespace vk
 		const std::vector<glsl::program_input>& vs_inputs, const std::vector<glsl::program_input>& fs_inputs)
 	{
 		VkPipeline pipeline;
-		CHECK_RESULT(VK_GET_SYMBOL(vkCreateGraphicsPipelines)(*m_device, VK_NULL_HANDLE, 1, &create_info, nullptr, &pipeline));
+		CHECK_RESULT(VK_GET_SYMBOL(vkCreateGraphicsPipelines)(*m_device, m_device->get_pipeline_cache(), 1, &create_info, nullptr, &pipeline));
 		auto result = std::make_unique<vk::glsl::program>(*m_device, pipeline, pipe_layout, vs_inputs, fs_inputs);
 		result->link();
 		return result;

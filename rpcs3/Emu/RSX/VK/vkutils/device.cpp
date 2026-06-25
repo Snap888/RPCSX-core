@@ -1,8 +1,12 @@
 #include "device.h"
 #include "instance.h"
 #include "util/logs.hpp"
+#include "util/File.h"
 #include "Emu/system_config.h"
 #include "Emu/system_utils.hpp"
+
+#include <cstring>
+#include <vector>
 
 namespace vk
 {
@@ -844,6 +848,10 @@ namespace vk
 		m_formats_support = vk::get_optimal_tiling_supported_formats(pdev);
 		m_pipeline_binding_table = vk::get_pipeline_binding_table(pdev);
 
+		// Create the on-disk-backed driver pipeline cache now that 'dev' is valid. Never fatal:
+		// on any failure m_pipeline_cache stays VK_NULL_HANDLE and we behave exactly as before.
+		load_pipeline_cache();
+
 		if (pgpu->optional_features_support.external_memory_host)
 		{
 			memory_map._vkGetMemoryHostPointerPropertiesEXT = reinterpret_cast<PFN_vkGetMemoryHostPointerPropertiesEXT>(VK_GET_SYMBOL(vkGetDeviceProcAddr)(dev, "vkGetMemoryHostPointerPropertiesEXT"));
@@ -890,6 +898,151 @@ namespace vk
 		memory_map.device_local_total_bytes = std::min(memory_map.device_local_total_bytes, vram_allocation_limit);
 	}
 
+	// Header prepended to the serialized driver pipeline-cache blob so we can reject
+	// foreign / stale / mismatched data before handing it back to the driver.
+	namespace
+	{
+		struct pipeline_cache_disk_header
+		{
+			u32 length;    // sizeof(this header) - guards against struct/layout drift
+			u32 version;   // must equal kPipelineCacheDiskVersion
+			u32 vendorID;  // must match the current physical device
+			u32 deviceID;  // must match the current physical device
+			u8 uuid[VK_UUID_SIZE]; // must match pipelineCacheUUID of the current driver
+		};
+
+		constexpr u32 kPipelineCacheDiskVersion = 1;
+	}
+
+	std::string render_device::get_pipeline_cache_path() const
+	{
+		// No-arg overload: fs::get_cache_dir() + "cache/" - no game/title/Emu state required,
+		// safe to call at device-create time.
+		return rpcs3::utils::get_cache_dir() + "vk_pipeline_cache.bin";
+	}
+
+	void render_device::load_pipeline_cache()
+	{
+		m_pipeline_cache = VK_NULL_HANDLE;
+
+		// Worst-case-safe: everything below is best-effort; any failure leaves the
+		// handle as VK_NULL_HANDLE, reproducing the pre-feature behavior exactly.
+		std::vector<u8> initial_data;
+
+		// (exceptions are disabled in this build; fs:: reports errors via return values,
+		// so a plain scope block with checked returns is the defensive equivalent)
+		{
+			const std::string path = get_pipeline_cache_path();
+			if (fs::file f{path, fs::read})
+			{
+				const u64 file_size = f.size();
+				if (file_size > sizeof(pipeline_cache_disk_header) && file_size < (256ull << 20))
+				{
+					std::vector<u8> blob(file_size);
+					if (f.read(blob.data(), file_size) == file_size)
+					{
+						pipeline_cache_disk_header hdr{};
+						std::memcpy(&hdr, blob.data(), sizeof(hdr));
+
+						const auto& props = pgpu->props;
+						const bool header_ok =
+							hdr.length == sizeof(pipeline_cache_disk_header) &&
+							hdr.version == kPipelineCacheDiskVersion &&
+							hdr.vendorID == props.vendorID &&
+							hdr.deviceID == props.deviceID &&
+							std::memcmp(hdr.uuid, props.pipelineCacheUUID, VK_UUID_SIZE) == 0;
+
+						if (header_ok)
+						{
+							// Hand only the trailing driver blob to vkCreatePipelineCache.
+							initial_data.assign(blob.begin() + sizeof(pipeline_cache_disk_header), blob.end());
+						}
+						else
+						{
+							rsx_log.notice("vk: pipeline cache on disk rejected (UUID/vendor/device/version mismatch); rebuilding.");
+						}
+					}
+				}
+			}
+		}
+
+		VkPipelineCacheCreateInfo create_info{};
+		create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
+		create_info.initialDataSize = initial_data.size();
+		create_info.pInitialData = initial_data.empty() ? nullptr : initial_data.data();
+
+		VkPipelineCache cache = VK_NULL_HANDLE;
+		const VkResult res = VK_GET_SYMBOL(vkCreatePipelineCache)(dev, &create_info, nullptr, &cache);
+		if (res == VK_SUCCESS && cache != VK_NULL_HANDLE)
+		{
+			m_pipeline_cache = cache;
+			rsx_log.notice("vk: driver pipeline cache active (seeded with %zu bytes).", initial_data.size());
+		}
+		else
+		{
+			// vkCreatePipelineCache failed (e.g. host OOM). Fall back to no cache - worst case == today.
+			m_pipeline_cache = VK_NULL_HANDLE;
+			rsx_log.warning("vk: vkCreatePipelineCache failed (0x%x); continuing without a driver pipeline cache.", static_cast<u32>(res));
+		}
+	}
+
+	void render_device::save_and_destroy_pipeline_cache()
+	{
+		if (m_pipeline_cache == VK_NULL_HANDLE)
+		{
+			return;
+		}
+
+		// Best-effort serialize. Any failure simply skips persistence; the destroy still runs.
+		{
+			size_t data_size = 0;
+			if (VK_GET_SYMBOL(vkGetPipelineCacheData)(dev, m_pipeline_cache, &data_size, nullptr) == VK_SUCCESS && data_size != 0)
+			{
+				std::vector<u8> blob(data_size);
+				if (VK_GET_SYMBOL(vkGetPipelineCacheData)(dev, m_pipeline_cache, &data_size, blob.data()) == VK_SUCCESS)
+				{
+					blob.resize(data_size); // driver may return fewer bytes than the initial query
+
+					pipeline_cache_disk_header hdr{};
+					hdr.length = sizeof(pipeline_cache_disk_header);
+					hdr.version = kPipelineCacheDiskVersion;
+					hdr.vendorID = pgpu->props.vendorID;
+					hdr.deviceID = pgpu->props.deviceID;
+					std::memcpy(hdr.uuid, pgpu->props.pipelineCacheUUID, VK_UUID_SIZE);
+
+					const std::string path = get_pipeline_cache_path();
+					const std::string tmp_path = path + ".tmp";
+
+					// Ensure the cache directory exists (no-op if already present).
+					fs::create_path(rpcs3::utils::get_cache_dir());
+
+					// Write to a temp file then atomically replace, so a crash mid-write can never
+					// leave a half-written blob that we would later read back.
+					if (fs::file out{tmp_path, fs::rewrite})
+					{
+						if (out.write(&hdr, sizeof(hdr)) == sizeof(hdr) &&
+							(blob.empty() || out.write(blob.data(), blob.size()) == blob.size()))
+						{
+							out.close();
+							if (!fs::rename(tmp_path, path, true))
+							{
+								fs::remove_file(tmp_path);
+							}
+						}
+						else
+						{
+							out.close();
+							fs::remove_file(tmp_path);
+						}
+					}
+				}
+			}
+		}
+
+		VK_GET_SYMBOL(vkDestroyPipelineCache)(dev, m_pipeline_cache, nullptr);
+		m_pipeline_cache = VK_NULL_HANDLE;
+	}
+
 	void render_device::destroy()
 	{
 		if (g_render_device == this)
@@ -904,6 +1057,11 @@ namespace vk
 				m_allocator->destroy();
 				m_allocator.reset();
 			}
+
+			// Serialize (best-effort) and destroy the pipeline cache BEFORE the device it belongs to.
+			// Safe here: vk::destroy_pipe_compiler() has already joined every worker thread, so no
+			// concurrent vkCreate*Pipelines can be touching the cache.
+			save_and_destroy_pipeline_cache();
 
 			VK_GET_SYMBOL(vkDestroyDevice)(dev, nullptr);
 			dev = nullptr;
