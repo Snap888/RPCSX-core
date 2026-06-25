@@ -90,6 +90,7 @@ struct music_decode
 		case CELL_MUSIC_DECODE_CMD_PREV:
 		{
 			decoder.stop();
+			read_pos = 0;
 
 			if (decoder.set_next_index(command == CELL_MUSIC_DECODE_CMD_NEXT) == umax)
 			{
