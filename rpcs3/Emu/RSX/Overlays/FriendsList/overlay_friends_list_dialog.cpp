@@ -685,6 +685,12 @@ namespace rsx
 				notify->wait(0, atomic_wait_timeout{1'000'000});
 			}
 
+			// Unregister the friend callback before this dialog is torn down. The
+			// rpcn_client is persistent (get_instance), so a leftover callback bound to
+			// this (about-to-be-freed) dialog would be a use-after-free on the next
+			// friend notification. Mirrors the SendMessage dialog (overlay_sendmessage_dialog.cpp).
+			m_rpcn->remove_friend_cb(friend_callback, this);
+
 			return CELL_OK;
 		}
 
