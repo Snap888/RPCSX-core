@@ -356,7 +356,8 @@ u32 music_selection_context::step_track(bool next)
 		{
 			// We reached the first or last track again. Let's shuffle!
 			cellMusicSelectionContext.notice("Shuffling playlist...");
-			auto engine = std::default_random_engine{};
+			std::random_device rd;
+			auto engine = std::default_random_engine{rd()};
 			std::shuffle(std::begin(playlist), std::end(playlist), engine);
 		}
 	}
