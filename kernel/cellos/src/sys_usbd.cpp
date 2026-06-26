@@ -649,8 +649,12 @@ void usb_handler_thread::operator()() {
     // Process asynchronous requests that are pending
     libusb_handle_events_timeout_completed(ctx, &lusb_tv, nullptr);
 
-    // Process fake transfers
-    if (!fake_transfers.empty()) {
+    // Process fake transfers - but only while libusbd.sprx is resident. After the game
+    // unloads the USB PRX, replying SYS_USBD_TRANSFER_COMPLETE into the torn-down
+    // libusbd module hangs/crashes (upstream e2e1cf0). libusbd_active is defined in
+    // PPUModule.cpp and set/cleared at the libusbd.sprx load/unload hooks.
+    extern atomic_t<bool> libusbd_active;
+    if (libusbd_active && !fake_transfers.empty()) {
       std::lock_guard lock_tf(mutex_transfers);
       u64 timestamp = get_system_time() - Emu.GetPauseTime();
 
