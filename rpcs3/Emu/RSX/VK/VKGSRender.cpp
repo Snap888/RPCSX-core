@@ -504,6 +504,13 @@ VKGSRender::VKGSRender(utils::serial* ar) noexcept : GSRender(ar)
 	if (!m_swapchain->init(m_swapchain_dims.width, m_swapchain_dims.height))
 	{
 		swapchain_unavailable = true;
+#ifdef ANDROID
+		// On Android the VkSurfaceKHR is bound to the ANativeWindow captured at create time, so a
+		// surface lost during boot-time init stays lost on re-query. Flag surface_lost so the first
+		// reinitialize_swapchain() takes the recreate branch (create()->make_WSI_surface) with the
+		// new window, instead of soft-looping forever without rebuilding the surface.
+		surface_lost = true;
+#endif
 	}
 
 	// create command buffer...

@@ -271,10 +271,33 @@ namespace vk
 		}
 
 		u32 nb_available_modes = 0;
-		CHECK_RESULT(VK_GET_SYMBOL(vkGetPhysicalDeviceSurfacePresentModesKHR)(gpu, m_surface, &nb_available_modes, nullptr));
+		{
+			const VkResult _pm_res = VK_GET_SYMBOL(vkGetPhysicalDeviceSurfacePresentModesKHR)(gpu, m_surface, &nb_available_modes, nullptr);
+#ifdef ANDROID
+			// A surface bounce (app backgrounded during the boot/compile splash) makes this query
+			// return SURFACE_LOST; treat it as recoverable (mirrors the capabilities guard above) -
+			// bail so the per-frame reinitialize_swapchain() path can recreate the surface.
+			if (_pm_res == VK_ERROR_SURFACE_LOST_KHR)
+			{
+				rsx_log.warning("Swapchain: surface lost while querying present mode count; will recreate.");
+				return false;
+			}
+#endif
+			CHECK_RESULT(_pm_res);
+		}
 
 		std::vector<VkPresentModeKHR> present_modes(nb_available_modes);
-		CHECK_RESULT(VK_GET_SYMBOL(vkGetPhysicalDeviceSurfacePresentModesKHR)(gpu, m_surface, &nb_available_modes, present_modes.data()));
+		{
+			const VkResult _pm_res = VK_GET_SYMBOL(vkGetPhysicalDeviceSurfacePresentModesKHR)(gpu, m_surface, &nb_available_modes, present_modes.data());
+#ifdef ANDROID
+			if (_pm_res == VK_ERROR_SURFACE_LOST_KHR)
+			{
+				rsx_log.warning("Swapchain: surface lost while querying present modes; will recreate.");
+				return false;
+			}
+#endif
+			CHECK_RESULT(_pm_res);
+		}
 
 		VkPresentModeKHR swapchain_present_mode = VK_PRESENT_MODE_FIFO_KHR;
 		std::vector<VkPresentModeKHR> preferred_modes;
@@ -374,7 +397,25 @@ namespace vk
 		rsx_log.notice("Swapchain: requesting full screen exclusive mode %d.", static_cast<int>(full_screen_exclusive_info.fullScreenExclusive));
 #endif
 
+#ifdef ANDROID
+		// Harden the previously-unchecked create on Android: a surface lost here (backgrounded
+		// during the boot/compile splash) is recoverable. Bail BEFORE destroying old_swapchain or
+		// calling init_swapchain_images (which would throw on zero images); keep old_swapchain as
+		// the live handle so create()'s unconditional destroy reclaims it on the recovery pass. Any
+		// other create failure stays fatal.
+		{
+			const VkResult _sc_res = _vkCreateSwapchainKHR(dev, &swap_info, nullptr, &m_vk_swapchain);
+			if (_sc_res == VK_ERROR_SURFACE_LOST_KHR)
+			{
+				rsx_log.warning("Swapchain: surface lost during vkCreateSwapchainKHR; will recreate.");
+				m_vk_swapchain = old_swapchain;
+				return false;
+			}
+			CHECK_RESULT(_sc_res);
+		}
+#else
 		_vkCreateSwapchainKHR(dev, &swap_info, nullptr, &m_vk_swapchain);
+#endif
 
 		if (old_swapchain)
 		{
