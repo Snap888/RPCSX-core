@@ -2186,6 +2186,19 @@ void sigpipe_signaling_handler(int)
 #ifdef ANDROID
 static void sigabrt_handler(int /*sig*/, siginfo_t* /*info*/, void* /*uct*/) noexcept
 {
+	// Re-entrancy guard: the diagnostics below allocate (std::string, the logger,
+	// backtrace symbolication). During a memory-exhaustion SIGABRT those allocations
+	// can themselves abort/terminate, which previously spun into an endless terminate
+	// storm that buried the real aborting frame. If this handler is re-entered, restore
+	// the default action and re-raise so we get a single clean tombstone instead.
+	static atomic_t<int> s_in_sigabrt{0};
+	if (s_in_sigabrt.exchange(1) != 0)
+	{
+		::signal(SIGABRT, SIG_DFL);
+		::raise(SIGABRT);
+		return;
+	}
+
 	// libc/scudo/driver abort() - without this handler the process dies with
 	// nothing in RPCSX.log (only SIGSEGV/SIGILL were captured before).
 	std::string msg = "Process abort (SIGABRT) - heap corruption, libc assert or library abort.\n";
@@ -2274,6 +2287,20 @@ const bool s_terminate_handler_set = []() -> bool
 {
 	std::set_terminate([]()
 		{
+			// Re-entrancy guard. Under memory exhaustion the terminate path itself
+			// allocates (report_fatal_error formats a message -> operator new; with
+			// -fno-exceptions a failed allocation calls std::terminate again), which
+			// recurses forever (terminate -> get_new_handler -> terminate ...) and
+			// buries the real crash - exactly what the Skate 2 patch-enable OOM
+			// produced (100+ stacked aborts). If terminate re-enters, hard-stop
+			// without allocating.
+			static atomic_t<int> s_terminating{0};
+			if (s_terminating.exchange(1) != 0)
+			{
+				::signal(SIGABRT, SIG_DFL);
+				std::abort();
+			}
+
 			if (rx::isDebuggerPresent())
 			{
 				logs::listener::sync_all();
