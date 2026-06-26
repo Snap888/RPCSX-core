@@ -9,6 +9,24 @@
 #include "util/StrUtil.h"
 #include "util/Thread.h"
 
+template <>
+void fmt_class_string<rsx::overlays::media_list_dialog::media_type>::format(std::string& out, u64 arg)
+{
+	format_enum(out, arg, [](rsx::overlays::media_list_dialog::media_type arg)
+	{
+		switch (arg)
+		{
+		case rsx::overlays::media_list_dialog::media_type::invalid: return "invalid";
+		case rsx::overlays::media_list_dialog::media_type::directory: return "directory";
+		case rsx::overlays::media_list_dialog::media_type::audio: return "audio";
+		case rsx::overlays::media_list_dialog::media_type::video: return "video";
+		case rsx::overlays::media_list_dialog::media_type::photo: return "photo";
+		}
+
+		return unknown;
+	});
+}
+
 namespace rsx
 {
 	namespace overlays
