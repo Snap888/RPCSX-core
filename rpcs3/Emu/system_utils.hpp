@@ -80,6 +80,13 @@ namespace rpcs3::utils
 	void set_smooth_shaders(bool on);
 	bool get_smooth_shaders();
 
+	// GPU turbo (max Adreno clocks). The actual KGSL ioctl lives in the app (adrenotools), so the
+	// core only stores the flag and forwards to an app-registered handler - this lets the in-game
+	// home-menu toggle drive the same path as the app's startup apply.
+	void set_gpu_turbo(bool on);
+	bool get_gpu_turbo();
+	void set_gpu_turbo_handler(void (*handler)(bool on));
+
 	void configure_logs(bool force_enable = false);
 
 	u32 check_user(const std::string& user);

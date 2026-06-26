@@ -134,6 +134,30 @@ namespace rpcs3::utils
 		return g_smooth_shaders.load(std::memory_order_relaxed);
 	}
 
+	static std::atomic<bool> g_gpu_turbo{false};
+	static void (*g_gpu_turbo_handler)(bool) = nullptr;
+
+	void set_gpu_turbo(bool on)
+	{
+		g_gpu_turbo.store(on, std::memory_order_relaxed);
+		// The actual clock-pinning ioctl is app-side (adrenotools); run it via the registered
+		// handler so both the app toggle and the in-game home menu funnel through one path.
+		if (auto handler = g_gpu_turbo_handler)
+		{
+			handler(on);
+		}
+	}
+
+	bool get_gpu_turbo()
+	{
+		return g_gpu_turbo.load(std::memory_order_relaxed);
+	}
+
+	void set_gpu_turbo_handler(void (*handler)(bool))
+	{
+		g_gpu_turbo_handler = handler;
+	}
+
 	u32 get_max_threads()
 	{
 		const u32 max_threads = static_cast<u32>(g_cfg.core.llvm_threads);

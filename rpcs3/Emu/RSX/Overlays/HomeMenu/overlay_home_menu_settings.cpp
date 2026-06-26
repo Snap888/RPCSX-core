@@ -286,6 +286,11 @@ namespace rsx
 				[](bool v) { thread_ctrl::set_android_affinity(v); },
 				"Efficiency-core affinity (restart game to apply)");
 
+			add_clanker_checkbox(
+				[]() { return rpcs3::utils::get_gpu_turbo(); },
+				[](bool v) { rpcs3::utils::set_gpu_turbo(v); },
+				"Max GPU clocks (turbo) - more heat/battery, helps only GPU-bound games");
+
 			apply_layout();
 		}
 	}

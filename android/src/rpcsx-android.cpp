@@ -3349,6 +3349,18 @@ extern "C" void _rpcsx_setSmoothShaders(int on) {
                        on ? "ON" : "off");
 }
 
+// Android GPU turbo (max Adreno clocks). The KGSL ioctl is app-only (adrenotools), so the core
+// stores the flag and calls back into an app-registered handler. This lets the in-game home-menu
+// toggle drive the exact same path as the app's startup apply.
+extern "C" void _rpcsx_setGpuTurbo(int on) {
+  rpcs3::utils::set_gpu_turbo(on != 0);
+  rpcsx_android.notice("GPU: turbo (max clocks) %s", on ? "ON" : "off");
+}
+
+extern "C" void _rpcsx_registerGpuTurboHandler(void (*handler)(bool)) {
+  rpcs3::utils::set_gpu_turbo_handler(handler);
+}
+
 extern "C" std::string _rpcsx_getVersion() {
   return rx::getVersion().toString();
 }
