@@ -148,7 +148,7 @@ error_code select_photo(std::string dst_dir)
 		localized_string_id::RSX_OVERLAYS_MEDIA_DIALOG_TITLE_PHOTO_IMPORT);
 
 	error_code error = rsx::overlays::show_media_list_dialog(
-		rsx::overlays::media_list_dialog::media_type::photo, vfs_dir_path, title,
+		rsx::overlays::media_list_dialog::media_type::photo, umax, vfs_dir_path, title,
 		[&pi_manager, dst_dir](s32 status, utils::media_info info)
 		{
 			sysutil_register_cb([&pi_manager, dst_dir, info,
