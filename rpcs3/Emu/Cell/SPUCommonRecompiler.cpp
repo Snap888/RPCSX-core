@@ -136,14 +136,16 @@ static spu_function_t compile_spu_llvm_with_retry(std::unique_ptr<spu_recompiler
 	spu_llvm_compile_context context;
 
 	{
-		// Compile without TBL2/TBX2. The aarch64_neon_tbl2/tbx2 intrinsics require two
-		// adjacently-allocated vector registers; under SPU register pressure LLVM can emit
-		// a pairing that compiles cleanly but reads the wrong register at runtime, silently
-		// corrupting dynamic SHUFB results (SPU register-file corruption -> games that lean
-		// on SPURS jobs, e.g. inFamous/Uncharted, crash). The scavenger-error retry below
-		// only catches a compile-time failure, not this runtime miscompile, so a bad tbl2
-		// slips through. The working ARM reference (aps3e) never emits these intrinsics; the
-		// split tbl1/tbx1 lowering is provably equivalent and has no adjacency requirement.
+		// Compile without TBL2/TBX2. The aarch64_neon_tbl2/tbx2 intrinsics read a register PAIR
+		// that must be adjacent in the file. LLVM lowers them through REG_SEQUENCE into the QQ
+		// consecutive-pair class, so the RESULT is always correct - this is NOT a runtime
+		// miscompile. The real hazard is at codegen: under SPU register pressure the allocator
+		// may be unable to free an adjacent pair and aborts the whole module with "Cannot
+		// scavenge register without an emergency spill slot" (the string the retry below keys on).
+		// Forcing the split tbl1/tbx1 lowering sidesteps that abort entirely - it needs no
+		// adjacent pair and is provably equivalent. The working ARM reference (aps3e) likewise
+		// never emits these intrinsics. (The separate SHUFB/ROTQBY shuffle-lowering corruption
+		// class is unrelated to tbl2 - do not conflate them.)
 		spu_llvm_compile_scope scope(context, false);
 
 		if (const auto result = compiler->compile(spu_program{program}))
