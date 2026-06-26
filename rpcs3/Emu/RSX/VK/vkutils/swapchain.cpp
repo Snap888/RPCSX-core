@@ -4,6 +4,7 @@
 
 #ifdef ANDROID
 #include <android/native_window.h>
+#include <dlfcn.h>
 #endif
 
 namespace vk
@@ -392,8 +393,13 @@ namespace vk
 		// Tell the panel the content cadence so a 90/120Hz display can align its refresh to a
 		// clean multiple for steady 30/60fps games (less judder, lower power). Advisory only; the
 		// hint is re-pushed only when the snapped fps changes, so it costs nothing per frame.
-		// ANativeWindow_setFrameRate is API 30+ (minSdk 29), hence the runtime availability guard.
-		if (__builtin_available(android 30, *))
+		// ANativeWindow_setFrameRate is API 30+ and minSdk is 29, so resolve it at runtime via
+		// dlsym (null -> pre-30 device, skip) rather than a compile-time availability guard, which
+		// the strict core build rejects. The compatibility constant DEFAULT is 0.
+		using set_frame_rate_fn = int32_t (*)(ANativeWindow *, float, int8_t);
+		static const auto s_set_frame_rate = reinterpret_cast<set_frame_rate_fn>(
+			dlsym(RTLD_DEFAULT, "ANativeWindow_setFrameRate"));
+		if (s_set_frame_rate)
 		{
 			const u64 period_ns = rpcs3::utils::get_frame_period_ns();
 			if (period_ns != 0)
@@ -404,9 +410,9 @@ namespace vk
 					const float snapped = static_cast<float>(static_cast<long>(fps + 0.5f));
 					if (snapped != m_last_frame_rate_hint)
 					{
-						if (auto awnd = std::get_if<ANativeWindow*>(&window_handle); awnd && *awnd)
+						if (auto awnd = std::get_if<ANativeWindow *>(&window_handle); awnd && *awnd)
 						{
-							ANativeWindow_setFrameRate(*awnd, snapped, ANATIVEWINDOW_FRAME_RATE_COMPATIBILITY_DEFAULT);
+							s_set_frame_rate(*awnd, snapped, 0 /* COMPATIBILITY_DEFAULT */);
 							m_last_frame_rate_hint = snapped;
 						}
 					}
