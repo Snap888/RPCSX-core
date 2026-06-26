@@ -109,7 +109,7 @@ namespace vk
 		}
 	}
 
-	swapchain_WSI::swapchain_WSI(vk::physical_device& gpu, u32 present_queue, u32 graphics_queue, u32 transfer_queue, VkFormat format, VkSurfaceKHR surface, VkColorSpaceKHR color_space, bool force_wm_reporting_off)
+	swapchain_WSI::swapchain_WSI(vk::physical_device& gpu, u32 present_queue, u32 graphics_queue, u32 transfer_queue, VkFormat format, VkSurfaceKHR surface, VkColorSpaceKHR color_space, bool force_wm_reporting_off, display_handle_t window)
 		: WSI_swapchain_base(gpu, present_queue, graphics_queue, transfer_queue, format)
 	{
 		_vkCreateSwapchainKHR = reinterpret_cast<PFN_vkCreateSwapchainKHR>(VK_GET_SYMBOL(vkGetDeviceProcAddr)(dev, "vkCreateSwapchainKHR"));
@@ -120,6 +120,9 @@ namespace vk
 
 		m_surface = surface;
 		m_color_space = color_space;
+		// Keep the native window so present-time hints (ANativeWindow_setFrameRate on Android) can
+		// reach it; the inherited window_handle is otherwise left default-null and the hint no-ops.
+		window_handle = window;
 
 		if (!force_wm_reporting_off)
 		{
@@ -414,6 +417,12 @@ namespace vk
 						{
 							s_set_frame_rate(*awnd, snapped, 0 /* COMPATIBILITY_DEFAULT */);
 							m_last_frame_rate_hint = snapped;
+							static bool s_logged_once = false;
+							if (!s_logged_once)
+							{
+								rsx_log.notice("Android: ANativeWindow_setFrameRate hint active (%.0f fps)", static_cast<double>(snapped));
+								s_logged_once = true;
+							}
 						}
 					}
 				}

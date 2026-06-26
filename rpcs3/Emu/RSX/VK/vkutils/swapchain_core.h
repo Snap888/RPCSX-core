@@ -184,7 +184,7 @@ namespace vk
 		void init_swapchain_images(render_device& dev, u32 preferred_count = 0) override;
 
 	public:
-		swapchain_WSI(vk::physical_device& gpu, u32 present_queue, u32 graphics_queue, u32 transfer_queue, VkFormat format, VkSurfaceKHR surface, VkColorSpaceKHR color_space, bool force_wm_reporting_off);
+		swapchain_WSI(vk::physical_device& gpu, u32 present_queue, u32 graphics_queue, u32 transfer_queue, VkFormat format, VkSurfaceKHR surface, VkColorSpaceKHR color_space, bool force_wm_reporting_off, display_handle_t window);
 
 		~swapchain_WSI() override = default;
 

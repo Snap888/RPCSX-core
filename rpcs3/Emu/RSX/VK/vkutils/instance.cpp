@@ -431,7 +431,7 @@ namespace vk
 
 		color_space = surfFormats[0].colorSpace;
 
-		return new swapchain_WSI(dev, present_queue_idx, graphics_queue_idx, transfer_queue_idx, format, m_surface, color_space, !surface_config.supports_automatic_wm_reports);
+		return new swapchain_WSI(dev, present_queue_idx, graphics_queue_idx, transfer_queue_idx, format, m_surface, color_space, !surface_config.supports_automatic_wm_reports, window_handle);
 	}
 
 #ifdef ANDROID
