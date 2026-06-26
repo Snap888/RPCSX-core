@@ -2,6 +2,10 @@
 #include "swapchain.h"
 #include "Emu/system_utils.hpp"
 
+#ifdef ANDROID
+#include <android/native_window.h>
+#endif
+
 namespace vk
 {
 	// Swapchain image RPCS3
@@ -384,6 +388,33 @@ namespace vk
 
 	VkResult swapchain_WSI::present(VkSemaphore semaphore, u32 image)
 	{
+#ifdef ANDROID
+		// Tell the panel the content cadence so a 90/120Hz display can align its refresh to a
+		// clean multiple for steady 30/60fps games (less judder, lower power). Advisory only; the
+		// hint is re-pushed only when the snapped fps changes, so it costs nothing per frame.
+		// ANativeWindow_setFrameRate is API 30+ (minSdk 29), hence the runtime availability guard.
+		if (__builtin_available(android 30, *))
+		{
+			const u64 period_ns = rpcs3::utils::get_frame_period_ns();
+			if (period_ns != 0)
+			{
+				const float fps = 1.0e9f / static_cast<float>(period_ns);
+				if (fps > 1.0f && fps < 1000.0f)
+				{
+					const float snapped = static_cast<float>(static_cast<long>(fps + 0.5f));
+					if (snapped != m_last_frame_rate_hint)
+					{
+						if (auto awnd = std::get_if<ANativeWindow*>(&window_handle); awnd && *awnd)
+						{
+							ANativeWindow_setFrameRate(*awnd, snapped, ANATIVEWINDOW_FRAME_RATE_COMPATIBILITY_DEFAULT);
+							m_last_frame_rate_hint = snapped;
+						}
+					}
+				}
+			}
+		}
+#endif
+
 		VkPresentInfoKHR present = {};
 		present.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 		present.pNext = nullptr;
