@@ -2112,14 +2112,29 @@ extern "C" bool _rpcsx_surfaceEvent(JNIEnv *env, jobject surface, jint event) {
       ANativeWindow_release(prevWindow);
     }
 
-    // relaxed: the surface can be lost while no pad thread exists (e.g. during
-    // emulation shutdown or before boot); a non-relaxed get_pad_thread() would
-    // ensure()-abort on the null handle and crash the process.
-    if (auto padThread = pad::get_pad_thread(true)) {
-      padThread->open_home_menu();
-    }
+    // surfaceDestroyed runs on the Android UI/main thread. Both open_home_menu() and
+    // Emu.Pause() can block for many seconds during a first-boot bulk PPU precompile
+    // (the guest main thread is parked waiting for modules to finish compiling). That
+    // froze the UI -> ANR -> force close whenever the user backgrounded a still-
+    // compiling first boot (RPCSX.old(17).log: surface lost at 0:01:08, the core kept
+    // running un-paused to 0:01:22, the UI hung). The native window is already released
+    // above - the only step the SurfaceHolder contract requires - so hand the pause and
+    // home-menu off to a detached worker and return immediately.
+    std::thread([] {
+      // relaxed: the surface can be lost while no pad thread exists (e.g. during
+      // emulation shutdown or before boot); a non-relaxed get_pad_thread() would
+      // ensure()-abort on the null handle and crash the process.
+      if (auto padThread = pad::get_pad_thread(true)) {
+        padThread->open_home_menu();
+      }
 
-    Emu.Pause();
+      // Only pause if the surface is still gone. A quick destroy->recreate (e.g. a
+      // rotation or a transient focus loss) fires event 0 -> Emu.Resume(); that resume
+      // must win the race, not this deferred pause.
+      if (g_native_window.load() == nullptr) {
+        Emu.Pause();
+      }
+    }).detach();
   } else {
     auto newWindow = ANativeWindow_fromSurface(env, surface);
 
