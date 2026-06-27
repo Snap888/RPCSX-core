@@ -168,8 +168,16 @@ namespace vk
 
 		if (!query_info.ready)
 		{
-			poke_query(query_info, index, result_flags);
+			// Block efficiently for the GPU result instead of busy-spinning a big CPU core.
+			// The command buffer carrying this query has already been submitted (the caller
+			// flushes it via occlusion_data::sync before reading), so VK_QUERY_RESULT_WAIT_BIT
+			// cannot deadlock and returns as soon as the result is available. On mobile TBDR GPUs
+			// (Adreno/Turnip) occlusion readback latency is high; the old rx::pause() spin pegged
+			// a big core for the entire wait and starved the SPU/PPU threads sharing it (the cores
+			// are already oversubscribed under Android affinity). Blocking sleeps and frees the core.
+			poke_query(query_info, index, result_flags | VK_QUERY_RESULT_WAIT_BIT);
 
+			// Defensive fallback: if the driver still reports the result as not-ready, poll.
 			while (!query_info.ready)
 			{
 				rx::pause();
