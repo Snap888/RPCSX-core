@@ -7987,10 +7987,10 @@ public:
 		set_vr(op.rt4, fnms(get_vr<f32[4]>(op.ra), get_vr<f32[4]>(op.rb), get_vr<f32[4]>(op.rc)));
 	}
 
-	template <typename T, typename U, typename V>
-	static llvm_calli<f32[4], T, U, V> fma(T&& a, U&& b, V&& c)
+	template <typename T, typename U, typename V, typename W = llvm_place_stealer_t<u32>, typename X = llvm_place_stealer_t<u32>>
+	static llvm_calli<f32[4], T, U, V, W, X> fma(T&& a, U&& b, V&& c, W&& d = match_stealer<u32>(), X&& e = match_stealer<u32>())
 	{
-		return llvm_calli<f32[4], T, U, V>{"spu_fma", {std::forward<T>(a), std::forward<U>(b), std::forward<V>(c)}}.set_order_equality_hint(1, 1, 0);
+		return llvm_calli<f32[4], T, U, V, W, X>{"spu_fma", {std::forward<T>(a), std::forward<U>(b), std::forward<V>(c), std::forward<W>(d), std::forward<X>(e)}}.set_order_equality_hint(1, 1, 2, 3, 4);
 	}
 
 	template <typename T, typename U>
@@ -8014,9 +8014,31 @@ public:
 				const auto a = value<f32[4]>(ci->getOperand(0));
 				const auto b = value<f32[4]>(ci->getOperand(1));
 				const auto c = value<f32[4]>(ci->getOperand(2));
+				const bool a_notnan = llvm::cast<llvm::ConstantInt>(ci->getOperand(3))->getZExtValue() != 0;
+				const bool b_notnan = llvm::cast<llvm::ConstantInt>(ci->getOperand(4))->getZExtValue() != 0;
 
 				if (g_cfg.core.spu_xfloat_accuracy == xfloat_accuracy::approximate)
 				{
+					// Skip the 0*inf->NaN guard masking on operands the analyzer already
+					// proved finite/not-NaN (matches upstream); only emit it where needed.
+					if (a.value == b.value || (a_notnan && b_notnan))
+					{
+						return fma32x4(a, b, c);
+					}
+
+					if (a_notnan)
+					{
+						const auto ma = sext<s32[4]>(fcmp_uno(a != fsplat<f32[4]>(0.)));
+						const auto cb = bitcast<f32[4]>(bitcast<s32[4]>(b) & ma);
+						return fma32x4(a, eval(cb), c);
+					}
+					else if (b_notnan)
+					{
+						const auto mb = sext<s32[4]>(fcmp_uno(b != fsplat<f32[4]>(0.)));
+						const auto ca = bitcast<f32[4]>(bitcast<s32[4]>(a) & mb);
+						return fma32x4(eval(ca), b, c);
+					}
+
 					const auto ma = sext<s32[4]>(fcmp_uno(a != fsplat<f32[4]>(0.)));
 					const auto mb = sext<s32[4]>(fcmp_uno(b != fsplat<f32[4]>(0.)));
 					const auto ca = bitcast<f32[4]>(bitcast<s32[4]>(a) & mb);
@@ -8063,6 +8085,9 @@ public:
 
 		const auto [a, b, c] = get_vrs<f32[4]>(op.ra, op.rb, op.rc);
 		static const auto MT = match<f32[4]>();
+
+		const u32 a_notnan = m_reduced_loop_info && m_reduced_loop_info->is_gpr_not_NaN_hint(op.ra) ? 1 : 0;
+		const u32 b_notnan = m_reduced_loop_info && m_reduced_loop_info->is_gpr_not_NaN_hint(op.rb) ? 1 : 0;
 
 		auto check_sqrt_pattern_for_float = [&](f32 float_value) -> bool
 		{
@@ -8258,7 +8283,7 @@ public:
 			spu_log.todo("[%s:0x%05x] Unmatched spu_rsqrte(c) found in FMA", m_hash, m_pos);
 		}
 
-		set_vr(op.rt4, fma(a, b, c));
+		set_vr(op.rt4, fma(a, b, c, a_notnan, b_notnan));
 	}
 
 	template <typename T, typename U, typename V>
