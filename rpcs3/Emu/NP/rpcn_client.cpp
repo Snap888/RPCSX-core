@@ -1185,6 +1185,32 @@ namespace rpcn
 
 			rpcn_log.notice("connect: Connection successful");
 
+#ifndef _WIN32
+			// Keep this long-lived RPCN control connection alive across idle periods. During a
+			// first-boot game compile no online packets flow for minutes; some mobile carrier NATs
+			// then silently drop the idle TCP mapping and the server side closes the connection
+			// ("connection reset by server") before the game's online code ever runs - and we do not
+			// transparently reconnect. Periodic TCP keepalive probes keep the NAT mapping warm. The
+			// OS-default keepalive only probes after ~2h idle (useless here), so tune it explicitly.
+			// All best-effort: a failed setsockopt just leaves the OS defaults.
+			{
+				const int ka_on = 1;
+				setsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, &ka_on, sizeof(ka_on));
+#ifdef TCP_KEEPIDLE
+				const int ka_idle = 30; // begin probing after 30s idle (well under typical NAT timeouts)
+				setsockopt(sockfd, IPPROTO_TCP, TCP_KEEPIDLE, &ka_idle, sizeof(ka_idle));
+#endif
+#ifdef TCP_KEEPINTVL
+				const int ka_intvl = 15; // probe every 15s
+				setsockopt(sockfd, IPPROTO_TCP, TCP_KEEPINTVL, &ka_intvl, sizeof(ka_intvl));
+#endif
+#ifdef TCP_KEEPCNT
+				const int ka_cnt = 4; // give up after 4 missed probes
+				setsockopt(sockfd, IPPROTO_TCP, TCP_KEEPCNT, &ka_cnt, sizeof(ka_cnt));
+#endif
+			}
+#endif
+
 #ifdef _WIN32
 			u_long _true = 1;
 			ensure(::ioctlsocket(sockfd, FIONBIO, &_true) == 0);
