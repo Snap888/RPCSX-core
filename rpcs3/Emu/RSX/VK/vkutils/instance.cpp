@@ -257,13 +257,25 @@ namespace vk
 		instance_info.ppEnabledExtensionNames = fast ? nullptr : extensions.data();
 		instance_info.pNext = next_info;
 
-		if (VkResult result = VK_GET_SYMBOL(vkCreateInstance)(&instance_info, nullptr, &m_instance); result != VK_SUCCESS)
-		{
-			if (result == VK_ERROR_LAYER_NOT_PRESENT)
-			{
-				rsx_log.fatal("Could not initialize layer VK_LAYER_KHRONOS_validation");
-			}
+		VkResult result = VK_GET_SYMBOL(vkCreateInstance)(&instance_info, nullptr, &m_instance);
 
+		if (result == VK_ERROR_LAYER_NOT_PRESENT && !layers.empty())
+		{
+			// The only instance layer we request on a non-MoltenVK target is
+			// VK_LAYER_KHRONOS_validation, enabled by the "Debug output" video setting. That layer
+			// ships only with the Vulkan SDK / debug builds and is absent on essentially every
+			// release Android device, so its absence must NOT brick rendering. Drop the optional
+			// layer(s) and retry instead of failing with "No Vulkan device was created" - toggling
+			// Debug Output on such a device then simply runs without GPU validation.
+			rsx_log.warning("A requested Vulkan instance layer (Debug Output validation) is unavailable on this device; continuing without it.");
+			layers.clear();
+			instance_info.enabledLayerCount = 0;
+			instance_info.ppEnabledLayerNames = nullptr;
+			result = VK_GET_SYMBOL(vkCreateInstance)(&instance_info, nullptr, &m_instance);
+		}
+
+		if (result != VK_SUCCESS)
+		{
 			return false;
 		}
 
