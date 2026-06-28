@@ -8283,7 +8283,7 @@ public:
 			spu_log.todo("[%s:0x%05x] Unmatched spu_rsqrte(c) found in FMA", m_hash, m_pos);
 		}
 
-		set_vr(op.rt4, fma(a, b, c, a_notnan, b_notnan));
+		set_vr(op.rt4, fma(a, b, c, splat<u32>(a_notnan), splat<u32>(b_notnan)));
 	}
 
 	template <typename T, typename U, typename V>
