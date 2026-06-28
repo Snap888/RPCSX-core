@@ -5704,15 +5704,20 @@ spu_program spu_recompiler_base::analyse(const be_t<u32>* ls, u32 entry_point, s
 			{
 				g_fxo->get<reduced_statistics_t>().breaking_reason[cause]++;
 
-				if (!spu_log.notice)
-				{
-					return;
-				}
-
+				// The dedup below feeds reduced_loop_all, which the recompiler READS to decide
+				// which loops get the reduced-loop treatment - so gating it on the log level made
+				// codegen log-dependent. Hoist it ABOVE the log gate so lowering the heavy
+				// SHA1 + full-disasm dump to trace keeps codegen byte-identical to the notice-on
+				// path the device already runs; only the (purely diagnostic) dump is skipped.
 				previous.active = false;
 				previous.failed = true;
 
 				reduced_loop_all[previous.loop_pc] = previous;
+
+				if (!spu_log.trace)
+				{
+					return;
+				}
 
 				std::string break_error = fmt::format("Reduced loop pattern breakage [%x cause=%u] (read_pc=0x%x)", pos, cause, previous.loop_pc);
 
@@ -5754,7 +5759,7 @@ spu_program spu_recompiler_base::analyse(const be_t<u32>* ls, u32 entry_point, s
 				std::string block_dump;
 				this->dump(result, block_dump, previous.loop_pc, previous.loop_end + 1);
 	
-				spu_log.notice("SPU Block Dump:\n%s", block_dump);
+				spu_log.trace("SPU Block Dump:\n%s", block_dump);
 			}
 		};
 
@@ -5888,7 +5893,7 @@ spu_program spu_recompiler_base::analyse(const be_t<u32>* ls, u32 entry_point, s
 							{
 								if (state_it->atomic16.active && !std::exchange(logged_block[target_pc / 4], true))
 								{
-									spu_log.notice("SPU Blcok Analysis is too extensive at 0x%x", entry_pc);
+									spu_log.trace("SPU Blcok Analysis is too extensive at 0x%x", entry_pc);
 								}
 
 								is_too_extensive = true;
@@ -5965,7 +5970,7 @@ spu_program spu_recompiler_base::analyse(const be_t<u32>* ls, u32 entry_point, s
 						{
 							if (!std::exchange(logged_block[target_pc / 4], true))
 							{
-								spu_log.notice("SPU block is a loop at [0x%05x -> 0x%05x]", state_it->pc, target_pc);
+								spu_log.trace("SPU block is a loop at [0x%05x -> 0x%05x]", state_it->pc, target_pc);
 							}
 
 							state_it->parent_target_index++;
@@ -5974,7 +5979,7 @@ spu_program spu_recompiler_base::analyse(const be_t<u32>* ls, u32 entry_point, s
 
 						if (is_loop_connector && !std::exchange(logged_block[target_pc / 4], true))
 						{
-							spu_log.notice("SPU block analysis is too repetitive at [0x%05x -> 0x%05x]", state_it->pc, target_pc);
+							spu_log.trace("SPU block analysis is too repetitive at [0x%05x -> 0x%05x]", state_it->pc, target_pc);
 						}
 
 						insert_entry = true;
