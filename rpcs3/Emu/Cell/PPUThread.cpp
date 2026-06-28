@@ -4260,11 +4260,14 @@ extern void ppu_precompile(std::vector<std::string>& dir_queue, std::vector<ppu_
 
 					if (mself.read(hdr) && hdr.get_count(mself.size()))
 					{
+						// Hoisted out of the per-record loop: the duplicate-offset set must persist
+						// across records, otherwise it was reset every iteration and the duplicate
+						// skip below could never trigger (matches upstream).
+						std::set<u64> offs;
+
 						for (u32 j = 0; j < hdr.count; j++)
 						{
 							mself_record rec{};
-
-							std::set<u64> offs;
 
 							if (mself.read(rec) && rec.get_pos(mself.size()))
 							{
