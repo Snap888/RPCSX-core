@@ -115,6 +115,15 @@ class spu_runtime
 	// Debug module output location
 	std::string m_cache_path;
 
+	// DIAGNOSTIC ONLY (SPU object-cache zero-write hunt): a per-boot, WIPED-on-start
+	// directory used to install the LLVM ObjectCache on the normal ARM64 SPU compile
+	// path so we can observe (via the objcache[DIAG] logs in util/JITLLVM.cpp) whether
+	// MCJIT actually writes SPU native objects. Because it is wiped every launch it
+	// never serves a stale object (getObject always misses) and never persists - this
+	// is NOT the deferred persistence feature, only an observation harness. Empty when
+	// unavailable.
+	std::string m_obj_cache_path;
+
 public:
 	// Trampoline to spu_recompiler_base::dispatch
 	static const spu_function_t tr_dispatch;
@@ -138,6 +147,13 @@ public:
 	const std::string& get_cache_path() const
 	{
 		return m_cache_path;
+	}
+
+	// DIAGNOSTIC ONLY: wiped-each-boot dir for the SPU object-cache write probe.
+	// Empty when unavailable (treat as "no cache").
+	const std::string& get_object_cache_path() const
+	{
+		return m_obj_cache_path;
 	}
 
 	// Rebuild ubertrampoline for given identifier (first instruction)

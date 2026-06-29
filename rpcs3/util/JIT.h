@@ -567,6 +567,13 @@ public:
 	// Returns false after LLVM fatal recovery. The compiler must be discarded.
 	bool try_fin(std::string& error);
 
+	// Combined codegen + finalize in a SINGLE recoverable step (one helper
+	// thread instead of two). Semantically equal to try_add followed by
+	// try_fin, but halves the per-module thread spawn/join on the ARM64 SPU
+	// recompile hot path. Returns false after LLVM fatal recovery.
+	bool try_add_fin(std::unique_ptr<llvm::Module> _module, const std::string& path, std::string& error);
+	bool try_add_fin(std::unique_ptr<llvm::Module> _module, std::string& error);
+
 	// Get compiled function address
 	u64 get(const std::string& name);
 

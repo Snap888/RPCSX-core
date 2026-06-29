@@ -1579,6 +1579,23 @@ spu_runtime::spu_runtime()
 	// would silently keep the old codegen alive - and they only waste storage.
 	fs::remove_all(m_cache_path + "llvm/", true);
 
+	// DIAGNOSTIC ONLY (SPU object-cache zero-write hunt): set up a WIPED-each-boot
+	// directory used to install the ObjectCache on the normal ARM64 SPU compile path,
+	// so the objcache[DIAG] logs in util/JITLLVM.cpp reveal whether MCJIT actually
+	// writes SPU native objects. Wiping every launch guarantees getObject always
+	// misses (no stale object can ever be served) and nothing persists across runs -
+	// this is purely an observation harness, NOT the deferred persistence feature.
+	// Remove this block (and get_object_cache_path's call sites) once the root cause
+	// is established.
+	m_obj_cache_path = m_cache_path + "llvm-spuobj-diag/";
+	fs::remove_all(m_obj_cache_path, true);
+
+	if (!fs::create_path(m_obj_cache_path))
+	{
+		// Could not create the probe dir - disable the probe rather than pass a bad path.
+		m_obj_cache_path.clear();
+	}
+
 	if (g_cfg.core.spu_debug && g_cfg.core.spu_decoder != spu_decoder_type::dynamic && g_cfg.core.spu_decoder != spu_decoder_type::_static)
 	{
 		if (!fs::create_dir(m_cache_path + "llvm-v2/"))

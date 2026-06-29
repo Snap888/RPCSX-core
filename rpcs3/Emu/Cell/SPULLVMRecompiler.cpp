@@ -3464,20 +3464,31 @@ public:
 
 			if (recoverable)
 			{
-				bool added = false;
+				bool ok = false;
 				std::string& llvm_error = g_spu_llvm_compile_context->llvm_error;
 
+				// Codegen + finalize in one recoverable helper thread (halves the
+				// per-block pthread_create/join vs the old try_add + try_fin pair).
 				if (g_cfg.core.spu_debug)
 				{
 					// Testing only
-					added = m_jit.try_add(std::move(_module), m_spurt->get_cache_path() + "llvm-v2/", llvm_error);
+					ok = m_jit.try_add_fin(std::move(_module), m_spurt->get_cache_path() + "llvm-v2/", llvm_error);
+				}
+				else if (!m_spurt->get_object_cache_path().empty())
+				{
+					// DIAGNOSTIC ONLY (SPU object-cache zero-write hunt): install the
+					// wiped-each-boot ObjectCache so the objcache[DIAG] logs reveal whether
+					// MCJIT writes SPU objects on the normal path. Not the deferred
+					// persistence feature (the dir is wiped every launch, see spu_runtime
+					// ctor). Revert this else-if once the root cause is established.
+					ok = m_jit.try_add_fin(std::move(_module), m_spurt->get_object_cache_path(), llvm_error);
 				}
 				else
 				{
-					added = m_jit.try_add(std::move(_module), llvm_error);
+					ok = m_jit.try_add_fin(std::move(_module), llvm_error);
 				}
 
-				if (!added || !m_jit.try_fin(llvm_error))
+				if (!ok)
 				{
 					if (add_to_file)
 					{

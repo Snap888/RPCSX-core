@@ -494,6 +494,16 @@ public:
 
 	void notifyObjectCompiled(const llvm::Module* _module, llvm::MemoryBufferRef obj) override
 	{
+		// DIAGNOSTIC (SPU object-cache zero-write hunt): MCJIT calls this from
+		// emitObject() only when an ObjectCache is set AND the module was actually
+		// compiled (not loaded from cache). Logging it at the very top - before any
+		// write-guard can bail - proves whether MCJIT invokes the write callback for
+		// SPU (__spu-*) modules at all. Remove once the root cause is established.
+		if (const std::string mod_name(_module->getName()); mod_name.starts_with("__spu"))
+		{
+			jit_log.notice("objcache[DIAG]: notifyObjectCompiled fired: %s (obj_size=%u, path=%s)", mod_name, static_cast<u32>(obj.getBufferSize()), m_path);
+		}
+
 		std::string name = m_path;
 
 		name.append(_module->getName());
@@ -581,6 +591,16 @@ public:
 	{
 		std::string path = m_path;
 		path.append(_module->getName().data());
+
+		// DIAGNOSTIC (SPU object-cache zero-write hunt): MCJIT calls getObject from
+		// generateCodeForModule() before compiling, only when an ObjectCache is set
+		// and the module has not yet been loaded. Logging the consult (hit or miss)
+		// for SPU modules proves whether MCJIT consults the SPU cache at all. Remove
+		// once the root cause is established.
+		if (const std::string mod_name(_module->getName()); mod_name.starts_with("__spu"))
+		{
+			jit_log.notice("objcache[DIAG]: getObject consulted: %s (path=%s)", mod_name, m_path);
+		}
 
 		if (auto buf = load(path))
 		{
@@ -1042,6 +1062,66 @@ bool jit_compiler::try_fin(std::string& error)
 	{
 		m_engine->finalizeObject();
 	}, error);
+}
+
+bool jit_compiler::try_add_fin(std::unique_ptr<llvm::Module> _module, const std::string& path, std::string& error)
+{
+	ObjectCache cache{path, this};
+	m_engine->setObjectCache(&cache);
+
+	const auto ptr = _module.get();
+	m_engine->addModule(std::move(_module));
+
+	// Codegen and finalize on a single recoverable helper thread. finalizeObject
+	// only touches the emitted object (relocation + permissions), not the IR, so
+	// running it back-to-back with generateCodeForModule is equivalent to the old
+	// two-call sequence - just one thread spawn/join instead of two.
+	const bool ok = run_recoverable_llvm([&]()
+	{
+		m_engine->generateCodeForModule(ptr);
+		m_engine->finalizeObject();
+	}, error);
+
+	// Always detach the (stack-local) cache before it goes out of scope.
+	m_engine->setObjectCache(nullptr);
+
+	if (!ok)
+	{
+		return false;
+	}
+
+	for (auto& func : ptr->functions())
+	{
+		// Delete IR to lower memory consumption
+		func.deleteBody();
+	}
+
+	return true;
+}
+
+bool jit_compiler::try_add_fin(std::unique_ptr<llvm::Module> _module, std::string& error)
+{
+	const auto ptr = _module.get();
+	m_engine->addModule(std::move(_module));
+
+	const bool ok = run_recoverable_llvm([&]()
+	{
+		m_engine->generateCodeForModule(ptr);
+		m_engine->finalizeObject();
+	}, error);
+
+	if (!ok)
+	{
+		return false;
+	}
+
+	for (auto& func : ptr->functions())
+	{
+		// Delete IR to lower memory consumption
+		func.deleteBody();
+	}
+
+	return true;
 }
 
 u64 jit_compiler::get(const std::string& name)
