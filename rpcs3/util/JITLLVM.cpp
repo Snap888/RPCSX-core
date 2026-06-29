@@ -387,6 +387,18 @@ struct MemoryManager2 : llvm::RTDyldMemoryManager
 	// May be a memory container internally
 	std::function<u64(const std::string&)> m_symbols_cement;
 
+#ifdef ARCH_ARM64
+	// Code sections allocated since the last finalizeMemory(), recorded so the I-cache can be
+	// made coherent for CROSS-CORE execution. The fork's jit_runtime is WX and never re-protects,
+	// and this manager's finalizeMemory historically did nothing (unlike upstream's
+	// SectionMemoryManager, which calls __clear_cache). On a single PE the existing ISB+DSB ISH
+	// after codegen suffices, but a block finalized on one core and executed on another (the async
+	// background compile, and boot precompile) can fetch stale bytes without an explicit
+	// dc cvau + ic ivau publish. We record the ranges here and flush them in finalizeMemory.
+	// ARM64-only: x86-64 has coherent I/D caches, so this bookkeeping is pure overhead there.
+	std::vector<std::pair<u8*, usz>> m_code_sections;
+#endif
+
 	MemoryManager2(std::function<u64(const std::string&)> symbols_cement = {}) noexcept
 		: m_symbols_cement(std::move(symbols_cement))
 	{
@@ -420,7 +432,16 @@ struct MemoryManager2 : llvm::RTDyldMemoryManager
 
 	u8* allocateCodeSection(uptr size, uint align, uint /*sec_id*/, llvm::StringRef /*sec_name*/) override
 	{
-		return jit_runtime::alloc(size, align, true);
+		u8* const ptr = jit_runtime::alloc(size, align, true);
+
+#ifdef ARCH_ARM64
+		if (ptr)
+		{
+			m_code_sections.emplace_back(ptr, size);
+		}
+#endif
+
+		return ptr;
 	}
 
 	u8* allocateDataSection(uptr size, uint align, uint /*sec_id*/, llvm::StringRef /*sec_name*/, bool /*is_ro*/) override
@@ -430,6 +451,20 @@ struct MemoryManager2 : llvm::RTDyldMemoryManager
 
 	bool finalizeMemory(std::string* = nullptr) override
 	{
+#ifdef ARCH_ARM64
+		// Make freshly written code coherent for execution on a DIFFERENT core: clean the
+		// data cache to the Point of Unification and invalidate stale instruction cache lines
+		// across the inner-shareable domain (dc cvau -> dsb ish -> ic ivau -> dsb ish). Bionic's
+		// __clear_cache emits exactly this. Plain ISB+DSB ISH (the same-core SMC flush used
+		// elsewhere) is NOT sufficient cross-core. Required for the async background compile;
+		// also closes a latent gap for blocks compiled by the boot-precompile worker threads.
+		for (const auto& [ptr, size] : m_code_sections)
+		{
+			__builtin___clear_cache(reinterpret_cast<char*>(ptr), reinterpret_cast<char*>(ptr + size));
+		}
+
+		m_code_sections.clear();
+#endif
 		return false;
 	}
 

@@ -2168,6 +2168,25 @@ spu_function_t spu_runtime::rebuild_ubertrampoline(u32 id_inst)
 		std::string fname;
 		fmt::append(fname, "__ub%u", m_flat_list.size());
 		jit_announce(wxptr, raw - wxptr, fname);
+
+#ifdef ARCH_ARM64
+		// Publish the freshly emitted ubertrampoline for CROSS-CORE execution before its pointer
+		// is installed into g_dispatcher below. This block has no barrier of its own and in the
+		// synchronous path is covered only incidentally by the trailing same-core ISB+DSB ISH at
+		// the compile site - which disappears once rebuild_ubertrampoline runs on the async
+		// background compile thread. dc cvau + ic ivau + dsb ish (via __clear_cache) makes the
+		// bytes visible to the SPU core's instruction fetch; the install below is a release CAS,
+		// so the code is coherent before the pointer becomes observable.
+		//
+		// The SPU consumer reads this pointer with a plain ldr in tr_all and br's to it with NO
+		// consumer-side ISB. That is correct ONLY because jit_runtime::alloc (JITASM.cpp
+		// add_jit_memory) is a monotonic bump allocator that never reuses an executable address
+		// within an emulation run: the SPU core has never fetched wxptr, so it holds no stale
+		// instruction/BTB state to discard, and the producer's ic ivau (inner-shareable) +
+		// dsb ish ordered before the SEQ_CST dispatcher store is sufficient. If a future change
+		// ever recycles JIT code addresses mid-run, this would need a consumer-side ISB.
+		__builtin___clear_cache(reinterpret_cast<char*>(wxptr), reinterpret_cast<char*>(raw));
+#endif
 	}
 
 	if (auto _old = stuff_it->trampoline.compare_and_swap(nullptr, result))
