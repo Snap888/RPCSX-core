@@ -2275,8 +2275,13 @@ static bool installPup(JNIEnv *env, fs::file &&pup_f, jlong progressId) {
   }
 
   if (static_cast<pup_error>(pup) != pup_error::ok) {
-    rpcsx_android.fatal("installFw: invalid PUP");
-    progress.failure("Firmware update file is broken");
+    const std::string &pup_detail = pup.get_formatted_error();
+    rpcsx_android.fatal("installFw: invalid PUP (%s)",
+                        pup_detail.empty() ? "unknown error" : pup_detail.c_str());
+    progress.failure(pup_detail.empty()
+                         ? std::string("Firmware update file is broken")
+                         : fmt::format("Firmware update file is broken: %s",
+                                       pup_detail));
     return false;
   }
 
