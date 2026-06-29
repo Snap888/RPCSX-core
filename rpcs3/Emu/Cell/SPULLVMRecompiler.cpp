@@ -6241,7 +6241,12 @@ public:
 			return;
 		}
 
-#ifdef ARCH_ARM64
+		// GATED to the portable scalar byte-gather below (the path stock RPCS3 and aps3e
+		// use), mirroring the GBB/GBH gate (4d5a30618). SUMB's ARM64 dotprod (udot) gather
+		// is the LAST live ARM64-only SPU byte-gather aps3e lacks; gating it puts the whole
+		// dotprod/i8mm gather family on the portable path for STOP-0x0 parity. SUMB is a
+		// rare sum-of-bytes op (negligible perf). Re-enable: #ifdef ARCH_ARM64
+#if 0 // was: #ifdef ARCH_ARM64
 		if (m_use_dotprod)
 		{
 			const auto [a, b] = get_vrs<u8[16]>(op.ra, op.rb);
