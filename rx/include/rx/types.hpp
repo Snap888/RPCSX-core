@@ -1019,12 +1019,18 @@ template <typename T, typename U>
 constexpr T read_from_ptr(U &&array, usz pos = 0) {
   // TODO: ensure array element types are trivial
   static_assert(sizeof(T) % sizeof(array[0]) == 0);
-  std::decay_t<decltype(array[0])> buf[sizeof(T) / sizeof(array[0])];
-  if (!std::is_constant_evaluated())
+  constexpr usz elements_per_value = sizeof(T) / sizeof(array[0]);
+
+  std::decay_t<decltype(array[0])> buf[elements_per_value];
+
+  if (!std::is_constant_evaluated()) {
     std::memcpy(+buf, &array[pos], sizeof(buf));
-  else
-    for (usz i = 0; i < pos; buf[i] = array[pos + i], i++)
-      ;
+  } else {
+    // The [] operator will not compile with OOB in a constant-evaluated context.
+    for (usz i = 0; i < elements_per_value; i++) {
+      buf[i] = array[pos + i];
+    }
+  }
   return std::bit_cast<T>(buf);
 }
 
