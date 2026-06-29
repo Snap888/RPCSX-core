@@ -886,6 +886,13 @@ std::string fmt::trim_front(const std::string& source, std::string_view values)
 void fmt::trim_back(std::string& source, std::string_view values)
 {
 	const usz index = source.find_last_not_of(values);
+
+	if (index == source.npos)
+	{
+		source.clear();
+		return;
+	}
+
 	source.resize(index + 1);
 }
 
