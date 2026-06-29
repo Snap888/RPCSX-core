@@ -196,6 +196,90 @@ static spu_function_t compile_spu_llvm_with_retry(std::unique_ptr<spu_recompiler
 
 	return result;
 }
+
+// Background SPU compile worker for the ARM64 interpret-first async path.
+//
+// ARM64 has no fast first-tier (spu_fast is x86-only), so the synchronous llvm decoder
+// compiles every block inline on the SPU thread - a multi-second stall storm on
+// SPURS-heavy games. Instead, on a block miss dispatch() hands the freshly analysed
+// spu_program to this thread and interprets the block via spu_interpreter_rt while the
+// compile runs in the background. compile_spu_llvm_with_retry installs the block as a
+// side effect (compile() does add_empty + compiled.store + rebuild_ubertrampoline, both
+// cross-core-published by the icache flush in MemoryManager2::finalizeMemory /
+// rebuild_ubertrampoline), and the SPU thread atomically picks up the native function on
+// its next dispatch through g_dispatcher.
+//
+// One worker only (Snapdragon has ~5 fast cores already saturated by the SPURS groups;
+// more compile threads would contend for them and risk OOM from N LLVM contexts). The
+// worker owns its own recompiler instance, never shared with SPU threads (verified
+// condition C1).
+//
+// Lifecycle/teardown safety: g_fxo (fixed_typemap) constructs every referenced type
+// EAGERLY at Emu init - this worker is NOT lazily created, and its construction order
+// relative to spu_runtime/spu_cache is not guaranteed. Safety instead comes from g_fxo
+// teardown: fixed_typemap::clear() runs a semi-destructor pass that aborts AND JOINS every
+// named_thread (thread_op) BEFORE it destroys any object. spu_runtime/spu_cache hold no
+// thread, so this worker is fully joined while they are still alive - it can never touch a
+// torn-down m_spurt (= &g_fxo->get<spu_runtime>()) regardless of construction order.
+struct spu_async_compiler
+{
+	lf_queue<spu_program> registered;
+
+	void operator()()
+	{
+		// Postponed: own LLVM recompiler instance (never shared with SPU threads).
+		std::unique_ptr<spu_recompiler_base> compiler;
+
+		for (auto slice = registered.pop_all();; [&]
+			{
+				if (slice)
+				{
+					slice.pop_front();
+				}
+
+				if (slice || thread_ctrl::state() == thread_state::aborting)
+				{
+					return;
+				}
+
+				thread_ctrl::wait_on(registered.get_wait_atomic(), 0);
+				slice = registered.pop_all();
+			}())
+		{
+			const spu_program* prog = slice.get();
+
+			if (thread_ctrl::state() == thread_state::aborting)
+			{
+				break;
+			}
+
+			if (!prog || prog->data.empty())
+			{
+				continue;
+			}
+
+			if (!compiler)
+			{
+				compiler = spu_recompiler_base::make_llvm_recompiler();
+				compiler->init();
+			}
+
+			// Installs the block as a side effect. Routed through the TBL2/TBX2
+			// reg-scavenge retry wrapper exactly like the synchronous dispatch path
+			// (verified condition C3). Return value is intentionally unused: on a genuine
+			// failure (both TBL2 and the no-TBL2 retry failed) compiled stays nullptr and
+			// item->queued stays 1, so the block is interpreted for the rest of the session
+			// and never re-enqueued. That is deliberate - re-enqueuing an uncompilable block
+			// would spin the worker forever - and it is strictly better than the synchronous
+			// path, which re-logs a fatal and re-dispatches the same failing block in a loop.
+			compile_spu_llvm_with_retry(compiler, *prog);
+		}
+	}
+
+	static constexpr auto thread_name = "SPU Async"sv;
+};
+
+using spu_async_compiler_thread = named_thread<spu_async_compiler>;
 #endif
 
 // Move 4 args for calling native function from a GHC calling convention function
@@ -2242,6 +2326,47 @@ spu_recompiler_base::~spu_recompiler_base()
 {
 }
 
+#ifdef ARCH_ARM64
+// Interpret one linear run of SPU code from spu.pc with the reference C++ interpreter,
+// used by the async dispatch path to make progress while the background worker compiles
+// this block. Mirrors old_interpreter's loop (verified condition A: spu_interpreter_rt is
+// complete and already driven per-instruction in llvm mode by interp_check), but returns
+// after a single linear run instead of looping the whole thread:
+//   - decode() == true  => sequential instruction completed, advance pc and continue.
+//   - decode() == false => the instruction set spu.pc itself (branch/STOP/RDCH/WRCH) - this
+//     is a real SPU boundary, the only safe place to hand back so a now-compiled successor
+//     block can take over (verified condition B: switch only at branch boundaries).
+//   - spu.state set     => honor check_state() exactly like the interpreter loop; final
+//     stop/interrupt disposition is left to the gateway loop (verified condition E).
+// The 0x10000 cap bounds a pathological branch-free run (a linear run cannot legitimately
+// exceed LS/4 instructions).
+static void spu_interpret_linear_run(spu_thread& spu)
+{
+	const auto& table = g_fxo->get<spu_interpreter_rt>();
+	const auto base = spu._ptr<u8>(0);
+
+	for (u32 i = 0; i < 0x10000; i++)
+	{
+		if (spu.state) [[unlikely]]
+		{
+			if (spu.check_state())
+			{
+				return;
+			}
+		}
+
+		const u32 op = *reinterpret_cast<const be_t<u32>*>(base + spu.pc);
+
+		if (!table.decode(op)(spu, {op}))
+		{
+			return;
+		}
+
+		spu.pc += 4;
+	}
+}
+#endif
+
 void spu_recompiler_base::dispatch(spu_thread& spu, void*, u8* rip)
 {
 	// If code verification failed from a patched patchpoint, clear it with a dispatcher jump
@@ -2317,7 +2442,32 @@ void spu_recompiler_base::dispatch(spu_thread& spu, void*, u8* rip)
 	}
 
 	auto program = spu.jit->analyse(spu._ptr<u32>(0), spu.pc);
+
 #ifdef ARCH_ARM64
+	// ARM64 interpret-first async path (opt-in; default safe block size only). Hand the
+	// block to the background compile worker and interpret it now, instead of stalling the
+	// SPU thread on synchronous LLVM codegen. Gated to safe block size because mega/giga keep
+	// cross-block state (stack_mirror return cache, giga real-function registers) that the
+	// interpreter does not maintain (verified condition B).
+	if (g_cfg.core.spu_async_compile && g_cfg.core.spu_block_size == spu_block_size_type::safe)
+	{
+		// Enqueue exactly once per block (dedup via spu_item::queued). add_empty creates/returns
+		// the item with compiled == nullptr, so it stays invisible to find()/the ubertrampoline
+		// until the worker installs the native code. Moving program here is safe: every path in
+		// this branch returns before the synchronous compile below could use it.
+		if (spu_item* item = spu.jit->get_runtime().add_empty(std::move(program));
+			item && !item->compiled && item->queued.exchange(1) == 0)
+		{
+			g_fxo->get<spu_async_compiler_thread>().registered.push(spu_program{item->data});
+		}
+
+		// Make progress now by interpreting one linear run, then hand back to the gateway loop
+		// (verified condition E: g_escape returns cleanly, exactly like the op==0 path above).
+		spu_interpret_linear_run(spu);
+		spu_runtime::g_escape(&spu);
+		return;
+	}
+
 	const auto func = compile_spu_llvm_with_retry(spu.jit, program);
 #else
 	const auto func = spu.jit->compile(std::move(program));

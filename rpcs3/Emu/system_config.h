@@ -36,6 +36,7 @@ struct cfg_root : cfg::node
 		cfg::_enum<thread_scheduler_mode> thread_scheduler{this, "Thread Scheduler Mode", thread_scheduler_mode::os};
 		cfg::_bool set_daz_and_ftz{this, "Set DAZ and FTZ", false};
 		cfg::_enum<spu_decoder_type> spu_decoder{this, "SPU Decoder", spu_decoder_type::llvm};
+		cfg::_bool spu_async_compile{this, "SPU Async Compile", false}; // ARM64 only, safe block size only: interpret a block while a background thread compiles it, instead of stalling the SPU thread on synchronous LLVM codegen
 		cfg::uint<0, 100> spu_reservation_busy_waiting_percentage{this, "SPU Reservation Busy Waiting Percentage", 0, true};
 		cfg::uint<0, 100> spu_getllar_busy_waiting_percentage{this, "SPU GETLLAR Busy Waiting Percentage", 100, true};
 		cfg::_bool spu_getllar_spin_optimization_disabled{this, "Disable SPU GETLLAR Spin Optimization", false, true};

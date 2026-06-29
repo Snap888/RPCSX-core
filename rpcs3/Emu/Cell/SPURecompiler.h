@@ -91,6 +91,11 @@ public:
 	atomic_t<u8> cached = false;
 	atomic_t<u8> logged = false;
 
+	// ARM64 interpret-first async path: set once when this block has been handed to the
+	// background compile worker, so concurrent/repeat dispatch() misses of the same block
+	// enqueue it exactly once while it is being interpreted.
+	atomic_t<u8> queued = false;
+
 	spu_item(spu_program&& data)
 		: data(std::move(data))
 	{
