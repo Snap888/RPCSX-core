@@ -471,8 +471,42 @@ namespace vk
 				const float fps = 1.0e9f / static_cast<float>(period_ns);
 				if (fps > 1.0f && fps < 1000.0f)
 				{
-					const float snapped = static_cast<float>(static_cast<long>(fps + 0.5f));
-					if (snapped != m_last_frame_rate_hint)
+					// Quantize the noisy per-flip rate to the nearest real PS3 cadence, then push the
+					// hint only after that cadence has held for a sustained window. get_frame_period_ns
+					// is the RAW per-flip wall interval (min ~16ms / max ~700ms+ within one second on
+					// jittery scenes), so a plain snap-and-push fired ANativeWindow_setFrameRate almost
+					// every frame, making SurfaceFlinger renegotiate the panel refresh rate continuously
+					// = beat-frequency judder under FIFO, the opposite of the hint's intent. Quantize +
+					// debounce hands the compositor ONE steady target per scene cadence and filters out
+					// loading/hitch transients (e.g. the spurious 89fps seen during a 30fps boot).
+					auto quantize_cadence = [](float f) -> float
+					{
+						static constexpr float cadences[] = { 24.f, 25.f, 30.f, 50.f, 60.f };
+						for (const float c : cadences)
+						{
+							const float d = f > c ? f - c : c - f;
+							if (d <= c * 0.12f) // within 12% snaps to the cadence
+								return c;
+						}
+						return static_cast<float>(static_cast<long>(f + 0.5f));
+					};
+					const float snapped = quantize_cadence(fps);
+
+					// Debounce ~0.75s of flips (rate-agnostic frame count) so a transient outlier
+					// resets but never reaches the panel; only a sustained cadence is pushed.
+					constexpr u32 stable_frames_required = 24;
+					if (snapped == m_pending_frame_rate_hint)
+					{
+						if (m_frame_rate_hint_stable_count < stable_frames_required)
+							++m_frame_rate_hint_stable_count;
+					}
+					else
+					{
+						m_pending_frame_rate_hint = snapped;
+						m_frame_rate_hint_stable_count = 1;
+					}
+
+					if (m_frame_rate_hint_stable_count >= stable_frames_required && snapped != m_last_frame_rate_hint)
 					{
 						if (auto awnd = std::get_if<ANativeWindow *>(&window_handle); awnd && *awnd)
 						{
