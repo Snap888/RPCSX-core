@@ -264,6 +264,27 @@ struct spu_async_compiler
 				compiler->init();
 			}
 
+			// Re-analyse on THIS worker's compiler before compiling. compile() consumes
+			// per-instance analysis side-state (m_bbs and friends) that analyse() populates;
+			// the synchronous dispatch path analyses on spu.jit immediately before compiling
+			// on that same instance. The program copy handed to this worker carries only the
+			// analysed byte-stream, NOT that side-state, so without re-analysing here compile()
+			// indexes an empty m_bbs and aborts ("Range check failed, container_size 0") - the
+			// exact crash observed in Mafia II. This mirrors what the TBL2/TBX2 retry inside
+			// compile_spu_llvm_with_retry already does on its fresh compiler.
+			const spu_program analysed = analyse_spu_llvm_program(*compiler, *prog);
+
+			if (analysed != *prog)
+			{
+				// Synthetic-LS re-analysis disagreed with the dispatch-time analysis. Should
+				// not happen for safe-size blocks (the async path is gated to safe), but if it
+				// does, skip rather than compile a program whose m_bbs does not match: the block
+				// stays interpreted (queued stays 1) and is never re-enqueued, same as a genuine
+				// compile failure. Same guard the TBL2 retry uses.
+				spu_log.error("[0x%05x] SPU async re-analysis mismatch (%u vs %u), skipping", prog->entry_point, analysed.data.size(), prog->data.size());
+				continue;
+			}
+
 			// Installs the block as a side effect. Routed through the TBL2/TBX2
 			// reg-scavenge retry wrapper exactly like the synchronous dispatch path
 			// (verified condition C3). Return value is intentionally unused: on a genuine
@@ -272,7 +293,7 @@ struct spu_async_compiler
 			// and never re-enqueued. That is deliberate - re-enqueuing an uncompilable block
 			// would spin the worker forever - and it is strictly better than the synchronous
 			// path, which re-logs a fatal and re-dispatches the same failing block in a loop.
-			compile_spu_llvm_with_retry(compiler, *prog);
+			compile_spu_llvm_with_retry(compiler, analysed);
 		}
 	}
 
