@@ -437,33 +437,52 @@ namespace vk
 		// Tell the panel the content cadence so a 90/120Hz display can align its refresh to a
 		// clean multiple for steady 30/60fps games (less judder, lower power). Advisory only; the
 		// hint is re-pushed only when the snapped fps changes, so it costs nothing per frame.
-		// ANativeWindow_setFrameRate is API 30+ and minSdk is 29, so resolve it at runtime (null
-		// -> pre-30 device, skip) rather than a compile-time availability guard, which the strict
-		// core build rejects. The compatibility constant DEFAULT is 0.
+		// ANativeWindow_setFrameRate* is API 30+ and minSdk is 29, so resolve at runtime (null ->
+		// pre-30 device, skip) rather than a compile-time availability guard, which the strict core
+		// build rejects.
 		//
-		// CRITICAL: this symbol is exported by libnativewindow.so, NOT libandroid.so (which only
-		// provides ANativeWindow_fromSurface/_acquire - the ANativeWindow_* symbols the core
-		// actually links). libnativewindow is not in this .so's DT_NEEDED group, so the original
-		// dlsym(RTLD_DEFAULT, ...) could never see the symbol on Android's namespaced linker, and
-		// the hint was silently inert every frame (verified: libnativewindow absent from the built
-		// .so's NEEDED list). dlopen the providing library by name to bring it into scope; the
-		// handle is intentionally kept for process lifetime (libnativewindow stays resident, never
-		// dlclose'd). Still resolves to null on pre-30 devices where the symbol does not exist.
-		using set_frame_rate_fn = int32_t (*)(ANativeWindow *, float, int8_t);
-		static const auto s_set_frame_rate = []() -> set_frame_rate_fn
+		// These symbols are exported by libnativewindow.so, NOT libandroid.so (which only provides
+		// ANativeWindow_fromSurface/_acquire - the ANativeWindow_* symbols the core links).
+		// libnativewindow is not in this .so's DT_NEEDED group, so a plain dlsym(RTLD_DEFAULT, ...)
+		// cannot see them on Android's namespaced linker (which is why the hint was once silently
+		// inert). dlopen the library by name to bring it into scope; the handle is kept for process
+		// lifetime (libnativewindow stays resident, never dlclose'd).
+		//
+		// Prefer the API-31 ...WithChangeStrategy variant: it lets us pass ONLY_IF_SEAMLESS so the
+		// panel switches refresh rate ONLY when it can do so without a visible (flickering) mode
+		// change. Fall back to the plain API-30 setter where the strategy variant is absent.
+		using sfr_strat_fn = int32_t (*)(ANativeWindow *, float, int8_t, int8_t);
+		using sfr_plain_fn = int32_t (*)(ANativeWindow *, float, int8_t);
+		struct sfr_fns { sfr_strat_fn strat; sfr_plain_fn plain; };
+		static const sfr_fns s_sfr = []() -> sfr_fns
 		{
-			void* const h = dlopen("libnativewindow.so", RTLD_NOW);
-			return h ? reinterpret_cast<set_frame_rate_fn>(dlsym(h, "ANativeWindow_setFrameRate")) : nullptr;
+			void* const lib = dlopen("libnativewindow.so", RTLD_NOW);
+			if (!lib)
+			{
+				return { nullptr, nullptr };
+			}
+			return {
+				reinterpret_cast<sfr_strat_fn>(dlsym(lib, "ANativeWindow_setFrameRateWithChangeStrategy")),
+				reinterpret_cast<sfr_plain_fn>(dlsym(lib, "ANativeWindow_setFrameRate")),
+			};
 		}();
-		// One-shot confirmation: with the dlopen fix this stays silent and the success notice
-		// below fires instead; if it ever logs, the symbol still failed to resolve on device.
-		[[maybe_unused]] static const bool s_set_frame_rate_diag = []
+		const bool sfr_available = s_sfr.strat || s_sfr.plain;
+
+		// ANATIVEWINDOW_FRAME_RATE_COMPATIBILITY_FIXED_SOURCE (1): emulated PS3 output is inherently
+		// fixed-cadence content, so the system should target a clean multiple of the hinted rate.
+		// ANATIVEWINDOW_CHANGE_FRAME_RATE_ONLY_IF_SEAMLESS (0): never trigger a flickering mode switch.
+		constexpr int8_t sfr_compat_fixed_source = 1;
+		constexpr int8_t sfr_change_only_if_seamless = 0;
+
+		// One-shot confirmation: with the dlopen fix this stays silent and the success notice below
+		// fires instead; if it ever logs, the symbols still failed to resolve on device.
+		[[maybe_unused]] static const bool s_sfr_diag = []
 		{
-			if (!s_set_frame_rate)
-				rsx_log.error("Android: ANativeWindow_setFrameRate unavailable (libnativewindow dlopen/dlsym failed)");
+			if (!s_sfr.strat && !s_sfr.plain)
+				rsx_log.error("Android: ANativeWindow_setFrameRate* unavailable (libnativewindow dlopen/dlsym failed)");
 			return true;
 		}();
-		if (s_set_frame_rate)
+		if (sfr_available)
 		{
 			const u64 period_ns = rpcs3::utils::get_frame_period_ns();
 			if (period_ns != 0)
@@ -510,12 +529,15 @@ namespace vk
 					{
 						if (auto awnd = std::get_if<ANativeWindow *>(&window_handle); awnd && *awnd)
 						{
-							s_set_frame_rate(*awnd, snapped, 0 /* COMPATIBILITY_DEFAULT */);
+							if (s_sfr.strat)
+								s_sfr.strat(*awnd, snapped, sfr_compat_fixed_source, sfr_change_only_if_seamless);
+							else
+								s_sfr.plain(*awnd, snapped, sfr_compat_fixed_source);
 							m_last_frame_rate_hint = snapped;
 							static bool s_logged_once = false;
 							if (!s_logged_once)
 							{
-								rsx_log.notice("Android: ANativeWindow_setFrameRate hint active (%.0f fps)", static_cast<double>(snapped));
+								rsx_log.notice("Android: ANativeWindow_setFrameRate hint active (%.0f fps, %s)", static_cast<double>(snapped), s_sfr.strat ? "seamless" : "legacy");
 								s_logged_once = true;
 							}
 						}
