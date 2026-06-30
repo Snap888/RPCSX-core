@@ -26,7 +26,7 @@ struct lv2_update_manager {
     if (std::from_chars(version_str.data(),
                         version_str.data() + version_str.size(),
                         system_sw_version, 16)
-            .ec != std::errc{})
+            .ec == std::errc{})
       system_sw_version <<= 40;
     else
       system_sw_version = 0;

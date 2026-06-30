@@ -46,7 +46,7 @@ static void set_timestamp(rsxaudio_shmem::ringbuf_t &ring_buf, u64 timestamp) {
                              (ring_buf.rw_max_idx > 2) - 1) %
                             ring_buf.rw_max_idx;
   const s32 entry_idx =
-      std::clamp<s32>(entry_idx_raw, 0, SYS_RSXAUDIO_RINGBUF_SZ);
+      std::clamp<s32>(entry_idx_raw, 0, SYS_RSXAUDIO_RINGBUF_SZ - 1);
 
   ring_buf.entries[entry_idx].timestamp = convert_to_timebased_time(timestamp);
 }
@@ -54,7 +54,7 @@ static void set_timestamp(rsxaudio_shmem::ringbuf_t &ring_buf, u64 timestamp) {
 static std::tuple<bool /*notify*/, u64 /*blk_idx*/, u64 /*timestamp*/>
 update_status(rsxaudio_shmem::ringbuf_t &ring_buf) {
   const s32 read_idx =
-      std::clamp<s32>(ring_buf.read_idx, 0, SYS_RSXAUDIO_RINGBUF_SZ);
+      std::clamp<s32>(ring_buf.read_idx, 0, SYS_RSXAUDIO_RINGBUF_SZ - 1);
 
   if ((ring_buf.entries[read_idx].valid & 1) == 0U) {
     return {};
@@ -64,7 +64,7 @@ update_status(rsxaudio_shmem::ringbuf_t &ring_buf) {
       (ring_buf.read_idx + ring_buf.rw_max_idx - (ring_buf.rw_max_idx > 2)) %
       ring_buf.rw_max_idx;
   const s32 entry_idx =
-      std::clamp<s32>(entry_idx_raw, 0, SYS_RSXAUDIO_RINGBUF_SZ);
+      std::clamp<s32>(entry_idx_raw, 0, SYS_RSXAUDIO_RINGBUF_SZ - 1);
 
   ring_buf.entries[read_idx].valid = 0;
   ring_buf.queue_notify_idx =
@@ -80,7 +80,7 @@ update_status(rsxaudio_shmem::ringbuf_t &ring_buf) {
 static std::pair<bool /*entry_valid*/, u32 /*addr*/>
 get_addr(const rsxaudio_shmem::ringbuf_t &ring_buf) {
   const s32 read_idx =
-      std::clamp<s32>(ring_buf.read_idx, 0, SYS_RSXAUDIO_RINGBUF_SZ);
+      std::clamp<s32>(ring_buf.read_idx, 0, SYS_RSXAUDIO_RINGBUF_SZ - 1);
 
   if (ring_buf.entries[read_idx].valid & 1) {
     return std::make_pair(true, ring_buf.entries[read_idx].dma_addr);
