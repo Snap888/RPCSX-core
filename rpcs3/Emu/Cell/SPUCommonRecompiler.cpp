@@ -1585,6 +1585,21 @@ bool spu_program::operator<(const spu_program& rhs) const noexcept
 	return lhs_offs < rhs_offs;
 }
 
+// SPU LLVM object-cache version. BUMP on ANY change that affects SPU codegen or the LLVM
+// toolchain (mirrors the PPU "v9-kusa" discipline): the ObjectCache loads purely by the
+// per-block module name (the SPU program hash) with NO IR/CPU/settings validation, so a
+// stale object would otherwise silently keep old codegen alive (the lr=0/SP-corruption
+// miscompile class). The per-config inputs (xfloat/block-size/dfma/reservations/dma/i8mm/
+// dotprod/cpu) are folded into the cache directory name in the ctor below; this version
+// covers everything else (the analyser, the IR emission, the LLVM build itself).
+static constexpr u32 SPU_OBJ_CACHE_VERSION = 1;
+
+// Per keyed-dir file cap. A heavy game writes ~5700 .obj.gz per config in one session (Mafia
+// II ~6462); 12000 leaves headroom so normal play does not re-clear. Above this we clear the
+// whole keyed dir and let it rebuild (simplest race-free policy - the multi-threaded
+// ObjectCache writers share no index and never evict).
+static constexpr usz SPU_OBJ_CACHE_MAX_FILES = 12000;
+
 spu_runtime::spu_runtime()
 {
 	// Clear LLVM output
@@ -1600,21 +1615,116 @@ spu_runtime::spu_runtime()
 	// would silently keep the old codegen alive - and they only waste storage.
 	fs::remove_all(m_cache_path + "llvm/", true);
 
-	// DIAGNOSTIC ONLY (SPU object-cache zero-write hunt): set up a WIPED-each-boot
-	// directory used to install the ObjectCache on the normal ARM64 SPU compile path,
-	// so the objcache[DIAG] logs in util/JITLLVM.cpp reveal whether MCJIT actually
-	// writes SPU native objects. Wiping every launch guarantees getObject always
-	// misses (no stale object can ever be served) and nothing persists across runs -
-	// this is purely an observation harness, NOT the deferred persistence feature.
-	// Remove this block (and get_object_cache_path's call sites) once the root cause
-	// is established.
-	m_obj_cache_path = m_cache_path + "llvm-spuobj-diag/";
-	fs::remove_all(m_obj_cache_path, true);
+	// Persistent SPU LLVM object cache (ARM64). Unlike upstream - which writes SPU objects
+	// only under spu_debug - we persist them on the default path because ARM64 has no
+	// spu_fast first tier, so without a cache every launch re-JITs thousands of SPU blocks
+	// (the synchronous-compile freeze storm). The ObjectCache keys ONLY on the per-block
+	// module name (the SPU program hash) with no load-time validation, so correctness
+	// depends ENTIRELY on folding every codegen input into the cache DIRECTORY name, exactly
+	// like the PPU "v9-kusa" scheme - miss one and a stale object resurrects old codegen.
+	{
+		// Fold EVERY input that affects ARM64 SPU LLVM codegen into the cache-dir key. The
+		// ObjectCache loads purely by module name (the per-block program hash) with no
+		// IR/CPU/settings validation, so ANY unfolded input that changes emitted IR would
+		// silently load a stale object (the lr=0/SP-corruption miscompile class). Each entry
+		// below was confirmed by reading its use to change emitted code on the default
+		// (spu_debug=off) path that uses this cache. If a new SPU codegen input is added, fold
+		// it here AND bump SPU_OBJ_CACHE_VERSION. NOTE: rsx_fifo_accuracy/strict_rendering_mode
+		// are deliberately NOT folded - their only codegen use (the MFC PUT path) is gated
+		// behind !g_use_rtm, which is constant-true on ARM64 (no RTM/TSX), so they do not
+		// affect our codegen; folding them would only churn the cache on unrelated changes.
+		sha1_context ctx;
+		u8 key[20];
+		sha1_starts(&ctx);
+
+		const auto fold = [&](const auto& v)
+		{
+			sha1_update(&ctx, reinterpret_cast<const u8*>(&v), sizeof(v));
+		};
+
+		const u32 version = SPU_OBJ_CACHE_VERSION;
+		fold(version);
+
+		// Multi-value config baked into / gating emitted IR.
+		const u32 xfloat = static_cast<u32>(g_cfg.core.spu_xfloat_accuracy.get()); // f64 vs approx xfloat path
+		const u32 block_size = static_cast<u32>(g_cfg.core.spu_block_size.get());  // chunk/loop structure
+		const u32 clocks_scale = static_cast<u32>(g_cfg.core.clocks_scale.get());  // SPU_RdDec fast-path (==100) gate
+		fold(xfloat);
+		fold(block_size);
+		fold(clocks_scale);
+
+		// Boolean config that toggles emitted IR (each confirmed at its use site): dfma=accurate
+		// FMA; reservations/dma=atomic & MFC codegen; prof=block_hash stores; verification/
+		// precise_verification=entry hash-check emission; loop_detection=wait-loop yield + RdDec
+		// path; mfc_debug=MFC instrumentation; rsx_res=putllc16_rsx_res call; compatible_mode=
+		// savestate gpr-store emission.
+		const u32 flags =
+			(static_cast<u32>(g_cfg.core.use_accurate_dfma.get())         << 0) |
+			(static_cast<u32>(g_cfg.core.spu_accurate_reservations.get()) << 1) |
+			(static_cast<u32>(g_cfg.core.spu_accurate_dma.get())          << 2) |
+			(static_cast<u32>(g_cfg.core.spu_prof.get())                  << 3) |
+			(static_cast<u32>(g_cfg.core.spu_verification.get())          << 4) |
+			(static_cast<u32>(g_cfg.core.precise_spu_verification.get())  << 5) |
+			(static_cast<u32>(g_cfg.core.spu_loop_detection.get())        << 6) |
+			(static_cast<u32>(g_cfg.core.mfc_debug.get())                 << 7) |
+			(static_cast<u32>(g_cfg.core.rsx_accurate_res_access.get())   << 8) |
+			(static_cast<u32>(g_cfg.savestate.compatible_mode.get())      << 9);
+		fold(flags);
+
+		// use_tbl2 is currently pinned false on both the first attempt and the reg-scavenge
+		// retry; if that ever changes for first-attempt compiles, bump SPU_OBJ_CACHE_VERSION.
+
+		// Device-variable codegen target, folded so a cache built on one device's HWCAP can
+		// never serve wrong-ISA objects to another (cross-device / forward-safety): the three
+		// variable ARM64 HWCAP features advertised to the SPU JIT engine's setMAttrs
+		// (JITLLVM.cpp ~812-844). sha3 is the critical one - unlike i8mm/dotprod (emitted only
+		// via gated intrinsics) +sha3 lets the AArch64 backend AUTO-SELECT eor3/bcax/xar from
+		// the plain XOR/rotate IR the SPU recompiler emits everywhere, so it changes object
+		// bytes outright (and a -sha3 core would SIGILL on them). sve/sve2 are force-pinned OFF
+		// there, so they are constant and not folded. Plus the timebase frequency baked as the
+		// RdDec divisor and the resolved LLVM CPU.
+		const u32 hw =
+			(static_cast<u32>(utils::has_i8mm())    << 0) |
+			(static_cast<u32>(utils::has_dotprod()) << 1) |
+			(static_cast<u32>(utils::has_sha3())    << 2);
+		const u64 tsc_freq = utils::get_tsc_freq();
+		fold(hw);
+		fold(tsc_freq);
+
+		const std::string cpu = jit_compiler::cpu(g_cfg.core.llvm_cpu);
+		sha1_update(&ctx, reinterpret_cast<const u8*>(cpu.data()), cpu.size());
+
+		sha1_finish(&ctx, key);
+
+		// Under the per-game cache dir (m_cache_path = ppu-<sha1>-<name>/) -> automatically per-game.
+		m_obj_cache_path = m_cache_path + fmt::format("spuobj-v%u-%s/", SPU_OBJ_CACHE_VERSION, fmt::base57(key, 16));
+	}
 
 	if (!fs::create_path(m_obj_cache_path))
 	{
-		// Could not create the probe dir - disable the probe rather than pass a bad path.
+		// Could not create the cache dir - disable the cache rather than pass a bad path.
 		m_obj_cache_path.clear();
+	}
+	else
+	{
+		// Storage cap (single-threaded boot-time scan; the multi-threaded ObjectCache writers
+		// share no index and never evict). If this keyed dir exceeds the cap, clear it whole
+		// and let it rebuild - the simplest race-free bound.
+		usz file_count = 0;
+
+		for (auto&& entry : fs::dir(m_obj_cache_path))
+		{
+			if (!entry.is_directory)
+			{
+				file_count++;
+			}
+		}
+
+		if (file_count > SPU_OBJ_CACHE_MAX_FILES)
+		{
+			fs::remove_all(m_obj_cache_path, true);
+			fs::create_path(m_obj_cache_path);
+		}
 	}
 
 	if (g_cfg.core.spu_debug && g_cfg.core.spu_decoder != spu_decoder_type::dynamic && g_cfg.core.spu_decoder != spu_decoder_type::_static)

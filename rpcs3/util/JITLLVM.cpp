@@ -494,16 +494,6 @@ public:
 
 	void notifyObjectCompiled(const llvm::Module* _module, llvm::MemoryBufferRef obj) override
 	{
-		// DIAGNOSTIC (SPU object-cache zero-write hunt): MCJIT calls this from
-		// emitObject() only when an ObjectCache is set AND the module was actually
-		// compiled (not loaded from cache). Logging it at the very top - before any
-		// write-guard can bail - proves whether MCJIT invokes the write callback for
-		// SPU (__spu-*) modules at all. Remove once the root cause is established.
-		if (const std::string mod_name(_module->getName()); mod_name.starts_with("__spu"))
-		{
-			jit_log.notice("objcache[DIAG]: notifyObjectCompiled fired: %s (obj_size=%u, path=%s)", mod_name, static_cast<u32>(obj.getBufferSize()), m_path);
-		}
-
 		std::string name = m_path;
 
 		name.append(_module->getName());
@@ -591,16 +581,6 @@ public:
 	{
 		std::string path = m_path;
 		path.append(_module->getName().data());
-
-		// DIAGNOSTIC (SPU object-cache zero-write hunt): MCJIT calls getObject from
-		// generateCodeForModule() before compiling, only when an ObjectCache is set
-		// and the module has not yet been loaded. Logging the consult (hit or miss)
-		// for SPU modules proves whether MCJIT consults the SPU cache at all. Remove
-		// once the root cause is established.
-		if (const std::string mod_name(_module->getName()); mod_name.starts_with("__spu"))
-		{
-			jit_log.notice("objcache[DIAG]: getObject consulted: %s (path=%s)", mod_name, m_path);
-		}
 
 		if (auto buf = load(path))
 		{

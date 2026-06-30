@@ -3476,11 +3476,11 @@ public:
 				}
 				else if (!m_spurt->get_object_cache_path().empty())
 				{
-					// DIAGNOSTIC ONLY (SPU object-cache zero-write hunt): install the
-					// wiped-each-boot ObjectCache so the objcache[DIAG] logs reveal whether
-					// MCJIT writes SPU objects on the normal path. Not the deferred
-					// persistence feature (the dir is wiped every launch, see spu_runtime
-					// ctor). Revert this else-if once the root cause is established.
+					// Persistent SPU object cache: codegen + finalize, writing the compiled
+					// object into the version+config+cpu-keyed dir (built in the spu_runtime
+					// ctor) so a repeat launch loads it instead of re-JITting the block. The
+					// keyed dir is the whole safety mechanism - the ObjectCache validates the
+					// module name only, never the IR/CPU/settings.
 					ok = m_jit.try_add_fin(std::move(_module), m_spurt->get_object_cache_path(), llvm_error);
 				}
 				else
