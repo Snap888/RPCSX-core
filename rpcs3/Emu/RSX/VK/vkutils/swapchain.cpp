@@ -437,12 +437,32 @@ namespace vk
 		// Tell the panel the content cadence so a 90/120Hz display can align its refresh to a
 		// clean multiple for steady 30/60fps games (less judder, lower power). Advisory only; the
 		// hint is re-pushed only when the snapped fps changes, so it costs nothing per frame.
-		// ANativeWindow_setFrameRate is API 30+ and minSdk is 29, so resolve it at runtime via
-		// dlsym (null -> pre-30 device, skip) rather than a compile-time availability guard, which
-		// the strict core build rejects. The compatibility constant DEFAULT is 0.
+		// ANativeWindow_setFrameRate is API 30+ and minSdk is 29, so resolve it at runtime (null
+		// -> pre-30 device, skip) rather than a compile-time availability guard, which the strict
+		// core build rejects. The compatibility constant DEFAULT is 0.
+		//
+		// CRITICAL: this symbol is exported by libnativewindow.so, NOT libandroid.so (which only
+		// provides ANativeWindow_fromSurface/_acquire - the ANativeWindow_* symbols the core
+		// actually links). libnativewindow is not in this .so's DT_NEEDED group, so the original
+		// dlsym(RTLD_DEFAULT, ...) could never see the symbol on Android's namespaced linker, and
+		// the hint was silently inert every frame (verified: libnativewindow absent from the built
+		// .so's NEEDED list). dlopen the providing library by name to bring it into scope; the
+		// handle is intentionally kept for process lifetime (libnativewindow stays resident, never
+		// dlclose'd). Still resolves to null on pre-30 devices where the symbol does not exist.
 		using set_frame_rate_fn = int32_t (*)(ANativeWindow *, float, int8_t);
-		static const auto s_set_frame_rate = reinterpret_cast<set_frame_rate_fn>(
-			dlsym(RTLD_DEFAULT, "ANativeWindow_setFrameRate"));
+		static const auto s_set_frame_rate = []() -> set_frame_rate_fn
+		{
+			void* const h = dlopen("libnativewindow.so", RTLD_NOW);
+			return h ? reinterpret_cast<set_frame_rate_fn>(dlsym(h, "ANativeWindow_setFrameRate")) : nullptr;
+		}();
+		// One-shot confirmation: with the dlopen fix this stays silent and the success notice
+		// below fires instead; if it ever logs, the symbol still failed to resolve on device.
+		[[maybe_unused]] static const bool s_set_frame_rate_diag = []
+		{
+			if (!s_set_frame_rate)
+				rsx_log.error("Android: ANativeWindow_setFrameRate unavailable (libnativewindow dlopen/dlsym failed)");
+			return true;
+		}();
 		if (s_set_frame_rate)
 		{
 			const u64 period_ns = rpcs3::utils::get_frame_period_ns();
