@@ -1129,10 +1129,14 @@ error_code sys_usbd_get_device_list(ppu_thread &ppu, u32 handle,
     return CELL_EINVAL;
 
   // TODO: was std::min<s32>
-  u32 i_tocopy = std::min<u32>(max_devices, ::size32(usbh.handled_devices));
+  const u32 i_tocopy = std::min<u32>(max_devices, ::size32(usbh.handled_devices));
+  u32 index = 0;
 
-  for (u32 index = 0; index < i_tocopy; index++) {
-    device_list[index] = usbh.handled_devices[index].first;
+  for (const auto& [_, device] : usbh.handled_devices) {
+    if (index == i_tocopy)
+      break;
+
+    device_list[index++] = device.first;
   }
 
   return not_an_error(i_tocopy);
