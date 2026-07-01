@@ -1606,7 +1606,10 @@ bool spu_program::operator<(const spu_program& rhs) const noexcept
 // miscompile class). The per-config inputs (xfloat/block-size/dfma/reservations/dma/i8mm/
 // dotprod/cpu) are folded into the cache directory name in the ctor below; this version
 // covers everything else (the analyser, the IR emission, the LLVM build itself).
-static constexpr u32 SPU_OBJ_CACHE_VERSION = 2;
+// v3: ARM USHL for inf_shl/inf_lshr masked infinite shifts (CPUTranslator.h, upstream 18fe6eeb7)
+// changes emitted SPU shift codegen; bump so devices rebuild off the select-pattern objects that
+// LLVM can miscompile into poison for large shifts (llvm-project#200698).
+static constexpr u32 SPU_OBJ_CACHE_VERSION = 3;
 
 // Per keyed-dir file cap. A heavy game writes ~5700 .obj.gz per config in one session (Mafia
 // II ~6462); 12000 leaves headroom so normal play does not re-clear. Above this we clear the

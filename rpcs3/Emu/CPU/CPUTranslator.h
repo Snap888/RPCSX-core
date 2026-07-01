@@ -3562,11 +3562,22 @@ public:
 
 	// Infinite-precision shift left
 	template <typename T, typename U, typename CT = llvm_common_t<T, U>>
-	auto inf_shl(T&& a, U&& b)
+	value_t<CT> inf_shl(T&& a, U&& b)
 	{
 		static constexpr u32 esz = llvm_value_t<CT>::esize;
 
-		return expr(select(b < esz, a << b, splat<CT>(0)), [](llvm::Value*& value, llvm::Module* _m) -> llvm_match_tuple<T, U>
+#ifdef ARCH_ARM64
+		auto sh = eval(std::forward<U>(b));
+		auto k = get_known_bits(sh);
+		const auto max_shift = llvm::APInt(k.Zero.getBitWidth(), esz * 2 - 1);
+
+		if ((k.Zero | max_shift).isAllOnes())
+		{
+			return ushl(std::forward<T>(a), sh);
+		}
+#endif
+
+		auto result = expr(select(b < esz, a << b, splat<CT>(0)), [](llvm::Value*& value, llvm::Module* _m) -> llvm_match_tuple<T, U>
 			{
 				static const auto M = match<CT>();
 
@@ -3584,15 +3595,28 @@ public:
 				value = nullptr;
 				return {};
 			});
+
+		return eval(result);
 	}
 
 	// Infinite-precision logical shift right (unsigned)
 	template <typename T, typename U, typename CT = llvm_common_t<T, U>>
-	auto inf_lshr(T&& a, U&& b)
+	value_t<CT> inf_lshr(T&& a, U&& b)
 	{
 		static constexpr u32 esz = llvm_value_t<CT>::esize;
 
-		return expr(select(b < esz, a >> b, splat<CT>(0)), [](llvm::Value*& value, llvm::Module* _m) -> llvm_match_tuple<T, U>
+#ifdef ARCH_ARM64
+		auto sh = eval(std::forward<U>(b));
+		auto k = get_known_bits(sh);
+		const auto max_shift = llvm::APInt(k.Zero.getBitWidth(), esz * 2 - 1);
+
+		if ((k.Zero | max_shift).isAllOnes())
+		{
+			return ushl(std::forward<T>(a), -sh);
+		}
+#endif
+
+		auto result = expr(select(b < esz, a >> b, splat<CT>(0)), [](llvm::Value*& value, llvm::Module* _m) -> llvm_match_tuple<T, U>
 			{
 				static const auto M = match<CT>();
 
@@ -3610,6 +3634,8 @@ public:
 				value = nullptr;
 				return {};
 			});
+
+		return eval(result);
 	}
 
 	// Infinite-precision arithmetic shift right (signed)
@@ -3755,8 +3781,20 @@ template <typename T1, typename T2, typename T3>
 		result.value = m_ir->CreateCall(get_intrinsic<u32[4]>(llvm::Intrinsic::aarch64_neon_umull), {data0, data1});
 		return result;
 	}
-	
-template <typename T1, typename T2>
+
+	template <typename T1, typename T2, typename T = llvm_common_t<T1, T2>>
+	value_t<T> ushl(T1 a, T2 b)
+	{
+		value_t<T> result;
+
+		const auto data0 = a.eval(m_ir);
+		const auto data1 = b.eval(m_ir);
+
+		result.value = m_ir->CreateCall(get_intrinsic<T>(llvm::Intrinsic::aarch64_neon_ushl), {data0, data1});
+		return result;
+	}
+
+	template <typename T1, typename T2>
 	auto addp(T1 a, T2 b)
 	{
 		using T_vector = typename is_llvm_expr<T1>::type;
