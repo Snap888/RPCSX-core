@@ -416,12 +416,16 @@ void pad_thread::operator()()
 
 				for (const auto& button : pad->m_buttons)
 				{
-					if (button.m_pressed && (button.m_outKeyCode == CELL_PAD_CTRL_CROSS ||
-												button.m_outKeyCode == CELL_PAD_CTRL_CIRCLE ||
-												button.m_outKeyCode == CELL_PAD_CTRL_TRIANGLE ||
-												button.m_outKeyCode == CELL_PAD_CTRL_SQUARE ||
-												button.m_outKeyCode == CELL_PAD_CTRL_START ||
-												button.m_outKeyCode == CELL_PAD_CTRL_SELECT))
+					if (button.m_pressed && (
+							(button.m_offset == CELL_PAD_BTN_OFFSET_DIGITAL1 && (
+								button.m_outKeyCode == CELL_PAD_CTRL_START ||
+								button.m_outKeyCode == CELL_PAD_CTRL_SELECT)) ||
+							(button.m_offset == CELL_PAD_BTN_OFFSET_DIGITAL2 && (
+								button.m_outKeyCode == CELL_PAD_CTRL_CROSS ||
+								button.m_outKeyCode == CELL_PAD_CTRL_CIRCLE ||
+								button.m_outKeyCode == CELL_PAD_CTRL_TRIANGLE ||
+								button.m_outKeyCode == CELL_PAD_CTRL_SQUARE))
+						))
 					{
 						any_button_pressed = true;
 						break;
