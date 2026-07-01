@@ -607,8 +607,8 @@ lv2_socket_p2ps::accept(bool is_lock) {
   sys_net_sockaddr ps3_addr{};
   auto *paddr = reinterpret_cast<sys_net_sockaddr_in_p2p *>(&ps3_addr);
 
-  lv2_socket_p2ps *sock_client = reinterpret_cast<lv2_socket_p2ps *>(
-      idm::check_unlocked<lv2_socket>(p2ps_client));
+  auto sock_client = static_cast<shared_ptr<lv2_socket_p2ps>>(
+      idm::get_unlocked<lv2_socket>(p2ps_client));
   {
     std::lock_guard lock(sock_client->mutex);
     paddr->sin_family = SYS_NET_AF_INET;
