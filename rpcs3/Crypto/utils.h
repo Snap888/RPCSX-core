@@ -22,7 +22,7 @@ u64 hex_to_u64(const char* hex_str);
 void hex_to_bytes(unsigned char* data, const char* hex_str, unsigned int str_length);
 
 // Crypto functions (AES128-CBC, AES128-ECB, SHA1-HMAC and AES-CMAC).
-void aescbc128_decrypt(unsigned char* key, unsigned char* iv, unsigned char* in, unsigned char* out, usz len);
+void aescbc128_decrypt(const unsigned char* key, unsigned char* iv, const unsigned char* in, unsigned char* out, usz len);
 void aescbc128_encrypt(unsigned char* key, unsigned char* iv, unsigned char* in, unsigned char* out, usz len);
 void aesecb128_encrypt(unsigned char* key, unsigned char* in, unsigned char* out);
 bool hmac_hash_compare(unsigned char* key, int key_len, unsigned char* in, usz in_len, unsigned char* hash, usz hash_len);

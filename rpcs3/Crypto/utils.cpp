@@ -66,7 +66,7 @@ void hex_to_bytes(unsigned char* data, const char* hex_str, unsigned int str_len
 }
 
 // Crypto functions (AES128-CBC, AES128-ECB, SHA1-HMAC and AES-CMAC).
-void aescbc128_decrypt(unsigned char* key, unsigned char* iv, unsigned char* in, unsigned char* out, usz len)
+void aescbc128_decrypt(const unsigned char* key, unsigned char* iv, const unsigned char* in, unsigned char* out, usz len)
 {
 	aes_context ctx;
 	aes_setkey_dec(&ctx, key, 128);
