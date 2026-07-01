@@ -4248,7 +4248,7 @@ public:
 #if defined(ARCH_X64) || defined(ARCH_ARM64)
 			if (utils::get_tsc_freq() && !(g_cfg.core.spu_loop_detection) && (g_cfg.core.clocks_scale == 100))
 			{
-				const auto timebase_offs = m_ir->CreateLoad(get_type<u64>(), m_ir->CreateIntToPtr(m_ir->getInt64(reinterpret_cast<u64>(&g_timebase_offs)), get_type<u64*>()));
+				const auto timebase_offs = m_ir->CreateLoad(get_type<u64>(), get_timebase_offs_ptr());
 				const auto timestamp = m_ir->CreateLoad(get_type<u64>(), spu_ptr<u64>(OFFSET_OF(spu_thread, ch_dec_start_timestamp)));
 				const auto dec_value = m_ir->CreateLoad(get_type<u32>(), spu_ptr<u32>(OFFSET_OF(spu_thread, ch_dec_value)));
 #if defined(ARCH_ARM64)
@@ -5079,7 +5079,7 @@ public:
 #if defined(ARCH_X64) || defined(ARCH_ARM64)
 			if (utils::get_tsc_freq() && !(g_cfg.core.spu_loop_detection) && (g_cfg.core.clocks_scale == 100))
 			{
-				const auto timebase_offs = m_ir->CreateLoad(get_type<u64>(), m_ir->CreateIntToPtr(m_ir->getInt64(reinterpret_cast<u64>(&g_timebase_offs)), get_type<u64*>()));
+				const auto timebase_offs = m_ir->CreateLoad(get_type<u64>(), get_timebase_offs_ptr());
 #if defined(ARCH_ARM64)
 				// CNTVCT_EL0: architectural virtual counter, readable in userspace on
 				// Android. Unlike llvm.readcyclecounter (-> PMCCNTR_EL0) it never traps.
@@ -9774,6 +9774,27 @@ public:
 		const auto func = llvm::cast<llvm::Function>(m_module->getOrInsertFunction("spu_segment_base", type).getCallee());
 		m_engine->updateGlobalMapping("spu_segment_base", reinterpret_cast<u64>(jit_runtime::alloc(0, 0)));
 		return m_ir->CreatePtrToInt(func, get_type<u64>());
+	}
+
+	// Relocation-safe pointer to the host g_timebase_offs global (u64, sys_time.cpp).
+	// Baking reinterpret_cast<u64>(&g_timebase_offs) as an LLVM immediate freezes a
+	// per-process .bss address into the compiled object; when the persistent SPU object
+	// cache reloads that block into a differently-based .so (a rebuild and/or per-launch
+	// ASLR of .bss) the immediate points at stale/unmapped memory and the RdDec/WrDec
+	// fast-path load faults (Demon's Souls libsre SPURS-kernel deterministic crash,
+	// fixed read 0x721ef02750). Instead reference it through a fork-private external
+	// symbol and bind the live address via updateGlobalMapping, exactly like
+	// spu_segment_base / spu_dispatcher: the reference becomes a relocation that
+	// findSymbol re-resolves to the current address on EVERY object load (fresh or
+	// cached), so no cached object ever carries the absolute address. A private name
+	// (not "g_timebase_offs") keeps updateGlobalMapping the sole resolver and avoids any
+	// dependence on process-symbol visibility/lookup order. The runtime CreateLoad still
+	// reads the live, possibly-updated global (savestate-safe), identical to before.
+	llvm::Value* get_timebase_offs_ptr()
+	{
+		const auto gv = m_module->getOrInsertGlobal("spu_timebase_offs", get_type<u64>());
+		m_engine->updateGlobalMapping("spu_timebase_offs", reinterpret_cast<u64>(&g_timebase_offs));
+		return gv;
 	}
 
 	static decltype(&spu_llvm_recompiler::UNK) decode(u32 op);

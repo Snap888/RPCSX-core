@@ -1606,7 +1606,7 @@ bool spu_program::operator<(const spu_program& rhs) const noexcept
 // miscompile class). The per-config inputs (xfloat/block-size/dfma/reservations/dma/i8mm/
 // dotprod/cpu) are folded into the cache directory name in the ctor below; this version
 // covers everything else (the analyser, the IR emission, the LLVM build itself).
-static constexpr u32 SPU_OBJ_CACHE_VERSION = 1;
+static constexpr u32 SPU_OBJ_CACHE_VERSION = 2;
 
 // Per keyed-dir file cap. A heavy game writes ~5700 .obj.gz per config in one session (Mafia
 // II ~6462); 12000 leaves headroom so normal play does not re-clear. Above this we clear the
