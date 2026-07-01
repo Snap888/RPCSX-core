@@ -1610,8 +1610,9 @@ bool spu_program::operator<(const spu_program& rhs) const noexcept
 // changes emitted SPU shift codegen; bump so devices rebuild off the select-pattern objects that
 // LLVM can miscompile into poison for large shifts (llvm-project#200698).
 // v4: FMA/AVX default-on for all ARM64 prime cores (not just Cortex) - upstream eaebd3426; changes
-// SPU FMA/verification codegen on non-Cortex cores (e.g. Oryon). Covers any other ARM SPU codegen
-// landed this build.
+// SPU FMA/verification codegen on non-Cortex cores (e.g. Oryon). Also covers the ARM checksum/
+// cmp_rdata multiply-accumulate cluster (ed145540a/35f65c224/fa5b89941/3f27cb8ff/03647fdb4) which
+// changes the SPU block self-verification codegen. Covers any other ARM SPU codegen this build.
 static constexpr u32 SPU_OBJ_CACHE_VERSION = 4;
 
 // Per keyed-dir file cap. A heavy game writes ~5700 .obj.gz per config in one session (Mafia
