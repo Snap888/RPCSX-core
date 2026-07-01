@@ -1289,13 +1289,15 @@ error_code sys_net_bnet_poll(ppu_thread &ppu, vm::ptr<sys_net_pollfd> fds,
       }
 
       if (auto sock = idm::check_unlocked<lv2_socket>(fds_buf[i].fd)) {
-        signaled += sock->poll(fds_buf[i], _fds[i]);
+        // poll() sets revents; counting happens once in the second loop below
+        // (equivalent to upstream's void-poll refactor 3b6afc1d9, avoiding the
+        // double-count where a ready fd was tallied here AND via revents).
+        sock->poll(fds_buf[i], _fds[i]);
 #ifdef _WIN32
         connecting[i] = sock->is_connecting();
 #endif
       } else {
         fds_buf[i].revents |= SYS_NET_POLLNVAL;
-        signaled++;
       }
     }
 
