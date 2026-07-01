@@ -1609,7 +1609,10 @@ bool spu_program::operator<(const spu_program& rhs) const noexcept
 // v3: ARM USHL for inf_shl/inf_lshr masked infinite shifts (CPUTranslator.h, upstream 18fe6eeb7)
 // changes emitted SPU shift codegen; bump so devices rebuild off the select-pattern objects that
 // LLVM can miscompile into poison for large shifts (llvm-project#200698).
-static constexpr u32 SPU_OBJ_CACHE_VERSION = 3;
+// v4: FMA/AVX default-on for all ARM64 prime cores (not just Cortex) - upstream eaebd3426; changes
+// SPU FMA/verification codegen on non-Cortex cores (e.g. Oryon). Covers any other ARM SPU codegen
+// landed this build.
+static constexpr u32 SPU_OBJ_CACHE_VERSION = 4;
 
 // Per keyed-dir file cap. A heavy game writes ~5700 .obj.gz per config in one session (Mafia
 // II ~6462); 12000 leaves headroom so normal play does not re-clear. Above this we clear the

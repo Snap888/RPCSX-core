@@ -3101,10 +3101,20 @@ protected:
 	bool m_use_ssse3 = true;
 
 	// Allow FMA
+#ifdef ARCH_ARM64
+	// All ARM64 CPUs have hardware (fused, IEEE-correct) FMA - enable unconditionally
+	// so non-Cortex prime cores (e.g. Qualcomm Oryon) get it too (port eaebd3426).
+	bool m_use_fma = true;
+#else
 	bool m_use_fma = false;
+#endif
 
-	// Allow AVX
+	// Allow AVX (on ARM64 this flag only speeds up SPU verification, no intrinsic path)
+#ifdef ARCH_ARM64
+	bool m_use_avx = true;
+#else
 	bool m_use_avx = false;
+#endif
 
 	// Allow skylake-x tier AVX-512
 	bool m_use_avx512 = false;

@@ -5524,7 +5524,10 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 			// produced by LLVM 20.1.3). Earlier: v8 bump deployed the ARM64 codegen fixes
 			// (branch-folding disable etc.) must not be reused, or the fixes never take
 			// effect on installs with an existing compiled cache.
-			fmt::append(obj_name, "v9-kusa-%s-%s-%s.obj", fmt::base57(output, 16), fmt::base57(settings), jit_compiler::cpu(g_cfg.core.llvm_cpu));
+			// v10: FMA/AVX default-on for all ARM64 (eaebd3426) changes PPU VMADDFP/fmuladd codegen
+			// on non-Cortex cores; also covers any other ARM64 PPU codegen landed this build. NEVER
+			// lower below v9 (would resurrect stale objects).
+			fmt::append(obj_name, "v10-kusa-%s-%s-%s.obj", fmt::base57(output, 16), fmt::base57(settings), jit_compiler::cpu(g_cfg.core.llvm_cpu));
 		}
 
 		if (cpu ? cpu->state.all_of(cpu_flag::exit) : Emu.IsStopped())

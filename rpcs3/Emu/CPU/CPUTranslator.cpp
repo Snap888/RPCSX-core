@@ -189,13 +189,6 @@ void cpu_translator::initialize(llvm::LLVMContext& context, llvm::ExecutionEngin
 		m_use_gfni = true;
 	}
 
-	// Aarch64 CPUs
-	if (cpu == "cyclone" || cpu.contains("cortex"))
-	{
-		m_use_fma = true;
-		// AVX does not use intrinsics so far
-		m_use_avx = true;
-	}
 
 #ifdef ARCH_ARM64
 	if (utils::has_dotprod())
