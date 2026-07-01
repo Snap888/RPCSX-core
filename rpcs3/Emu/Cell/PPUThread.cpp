@@ -5317,6 +5317,7 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 				{
 					// Replace the function with ppu_far_jump
 					fpos++;
+					part.excluded_funcs.emplace_back(func.addr);
 					continue;
 				}
 			}
@@ -5345,6 +5346,11 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 			for (const auto& func : part.get_funcs())
 			{
 				if (func.size == 0)
+				{
+					continue;
+				}
+
+				if (std::count(part.excluded_funcs.begin(), part.excluded_funcs.end(), func.addr))
 				{
 					continue;
 				}
@@ -5446,6 +5452,13 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 				{
 					if (func.size == 0)
 					{
+						continue;
+					}
+
+					if (g_fxo->is_init<ppu_far_jumps_t>() && !g_fxo->get<ppu_far_jumps_t>().get_targets(func.addr, func.size).empty())
+					{
+						// Filter out functions with patches
+						part.excluded_funcs.emplace_back(func.addr);
 						continue;
 					}
 
@@ -5902,6 +5915,11 @@ static void ppu_initialize2(jit_compiler& jit, const ppu_module<lv2_obj>& module
 	{
 		if (func.size)
 		{
+			if (std::count(module_part.excluded_funcs.begin(), module_part.excluded_funcs.end(), func.addr))
+			{
+				continue;
+			}
+
 			const auto f = cast<Function>(_module->getOrInsertFunction(fmt::format("__0x%x", func.addr - reloc), _func).getCallee());
 			f->setCallingConv(CallingConv::GHC);
 			f->addParamAttr(1, llvm::Attribute::NoAlias);
@@ -5955,6 +5973,11 @@ static void ppu_initialize2(jit_compiler& jit, const ppu_module<lv2_obj>& module
 
 			if (mod_func.size)
 			{
+				if (std::count(module_part.excluded_funcs.begin(), module_part.excluded_funcs.end(), mod_func.addr))
+				{
+					continue;
+				}
+
 				num_func++;
 				guest_code_size += mod_func.size;
 				max_addr = std::max<u32>(max_addr, mod_func.addr + mod_func.size);
