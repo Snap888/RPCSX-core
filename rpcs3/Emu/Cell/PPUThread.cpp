@@ -5716,6 +5716,16 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 						total_fn_size += fn.size;
 					}
 
+					// CAUTION: this estimate is degenerate and load-bearing: ~16 KiB
+					// per guest-code byte makes every ~100 KiB part request ~1.6 GiB,
+					// exceeding the Android budget, so the solo-allocation escape
+					// admits exactly ONE part at a time. That accidental full
+					// serialization is the only thing bounding peak compile RSS on
+					// 7-8 GiB phones (the resolver parts' real LLVM cost is dominated
+					// by their ~program-wide declaration count, which this formula
+					// does not model at all). Do NOT make the multiplier "honest"
+					// without adding a real concurrency bound - honest small requests
+					// would admit several multi-GiB codegens in parallel and OOM.
 					ppu_log.warning("LLVM: reporting used memory %u (free/total: %u/%u) by %s%s", total_fn_size * 1024 * 16, memory_limit.free_memory(), memory_limit.total_memory(), cache_path, obj_name);
 					auto used_memory = memory_limit.acquire(total_fn_size * 1024 * 16);
 
