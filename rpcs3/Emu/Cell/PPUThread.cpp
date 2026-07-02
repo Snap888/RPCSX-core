@@ -5527,8 +5527,9 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 				accurate_vnan,
 				accurate_nj_mode,
 				contains_symbol_resolver,
+				arm64_fma_newly_on,
 
-				bitset_last = contains_symbol_resolver,
+				bitset_last = arm64_fma_newly_on,
 			};
 
 			be_t<rx::EnumBitSet<ppu_settings>> settings{};
@@ -5559,15 +5560,41 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 			if (fpos >= info.get_funcs().size() || module_counter % c_moudles_per_jit == c_moudles_per_jit - 1)
 				settings += ppu_settings::contains_symbol_resolver; // Avoid invalidating all modules for this purpose
 
+			const std::string c_cpu_name = jit_compiler::cpu(g_cfg.core.llvm_cpu);
+
+#ifdef ARCH_ARM64
+			// FMA/AVX went default-on for ALL ARM64 (eaebd3426). Before that,
+			// cpu_translator gated m_use_fma on `cpu == "cyclone" ||
+			// cpu.contains("cortex")` over the SAME string used as the key
+			// suffix below (getTargetCPU() == jit_compiler::cpu(), verified
+			// byte-identical derivation), so FMA was implicitly encoded in the
+			// key. The change decoupled that: on non-Cortex/non-Cyclone cores
+			// (e.g. Qualcomm Oryon) m_use_fma flipped false->true = different
+			// codegen = their cached objects are STALE, while Cortex codegen is
+			// byte-identical and MUST keep hitting its existing cache (a blanket
+			// version bump here cost testers a multi-session full-EBOOT
+			// recompile for nothing - and exposed the resolver-OOM crash).
+			// So: granular invalidation - fold the FMA decision into the
+			// settings hash exactly where it changed. The predicate must stay
+			// EXACTLY the old gate; anything looser fails to invalidate a
+			// truly-changed core (stale-codegen bug), anything tighter
+			// recompiles valid caches.
+			if (!(c_cpu_name == "cyclone" || c_cpu_name.find("cortex") != std::string::npos))
+				settings += ppu_settings::arm64_fma_newly_on;
+#endif
+
 			// Write version, hash, CPU, settings
 			// v9: recompile everything under the LLVM 19.1.7 JIT backend (v8 objs were
 			// produced by LLVM 20.1.3). Earlier: v8 bump deployed the ARM64 codegen fixes
 			// (branch-folding disable etc.) must not be reused, or the fixes never take
 			// effect on installs with an existing compiled cache.
-			// v10: FMA/AVX default-on for all ARM64 (eaebd3426) changes PPU VMADDFP/fmuladd codegen
-			// on non-Cortex cores; also covers any other ARM64 PPU codegen landed this build. NEVER
-			// lower below v9 (would resurrect stale objects).
-			fmt::append(obj_name, "v10-kusa-%s-%s-%s.obj", fmt::base57(output, 16), fmt::base57(settings), jit_compiler::cpu(g_cfg.core.llvm_cpu));
+			// The FMA/AVX-for-all-ARM64 change is keyed via arm64_fma_newly_on
+			// above (granular; briefly shipped as a blanket v10 bump in draft
+			// builds). The excluded_funcs port self-invalidates via the module
+			// hash (patched funcs are dropped from the hashed address list), so
+			// it needs no version change. NEVER lower the version below v9
+			// (would resurrect stale objects).
+			fmt::append(obj_name, "v9-kusa-%s-%s-%s.obj", fmt::base57(output, 16), fmt::base57(settings), c_cpu_name);
 		}
 
 		if (cpu ? cpu->state.all_of(cpu_flag::exit) : Emu.IsStopped())
