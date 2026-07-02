@@ -771,6 +771,31 @@ jit_compiler::jit_compiler(const std::unordered_map<std::string, u64>& _link, co
 			fmt::throw_exception("LLVM Emergency Exit Invoked: '%s'", out);
 		}, nullptr);
 
+		// Separate handler from the fatal one (LLVM installs/dispatches them
+		// independently). Without it, an allocation failure inside LLVM (e.g.
+		// report_bad_alloc_error from SmallVector growth while codegenning the
+		// ~478k-declaration PPU symbol-resolver module) writes "LLVM ERROR: out
+		// of memory" to fd 2 - which goes nowhere in an Android app - and calls
+		// abort(): a signal-6 death with ZERO file log (observed on device,
+		// Demon's Souls BLUS30443). Route it through the same recoverable path
+		// as the fatal handler so a guarded compile survives and everything
+		// else at least logs before dying. Note: allocating in a bad-alloc
+		// handler is best-effort; typical failures here are huge single
+		// allocations, so small log/string allocations still succeed.
+		llvm::remove_bad_alloc_error_handler();
+		llvm::install_bad_alloc_error_handler([](void*, const char* msg, bool)
+		{
+			const std::string_view out = msg ? msg : "";
+
+			if (g_llvm_fatal_message)
+			{
+				*g_llvm_fatal_message = out;
+				thread_ctrl::silent_exit();
+			}
+
+			fmt::throw_exception("LLVM Out Of Memory: '%s'", out);
+		}, nullptr);
+
 		return true;
 	}();
 
