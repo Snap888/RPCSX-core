@@ -302,7 +302,9 @@ extern void ppu_initialize();
 extern void ppu_finalize(const ppu_module<lv2_obj>& info, bool force_mem_release = false);
 extern bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only = false, u64 file_size = 0);
 extern bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_size, concurent_memory_limit& memory_limit);
-static void ppu_initialize2(class jit_compiler& jit, const ppu_module<lv2_obj>& module_part, const std::string& cache_path, const std::string& obj_name);
+// Returns true if the module was compiled (or loaded) and its object is usable;
+// false when cancelled by shutdown/pause or when LLVM codegen failed (e.g. OOM).
+static bool ppu_initialize2(class jit_compiler& jit, const ppu_module<lv2_obj>& module_part, const std::string& cache_path, const std::string& obj_name);
 extern bool ppu_load_exec(const ppu_exec_object&, bool virtual_load, const std::string&, utils::serial* = nullptr);
 extern std::pair<shared_ptr<lv2_overlay>, CellError> ppu_load_overlay(const ppu_exec_object&, bool virtual_load, const std::string& path, s64 file_offset, utils::serial* = nullptr);
 extern void ppu_unload_prx(const lv2_prx&);
@@ -5692,13 +5694,30 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 
 					ppu_log.warning("LLVM: Compiling module %s%s", cache_path, obj_name);
 
+					bool compiled_ok = false;
 					{
 						// Use another JIT instance
 						jit_compiler jit2({}, g_cfg.core.llvm_cpu, 0x1);
-						ppu_initialize2(jit2, part, cache_path, obj_name);
+						compiled_ok = ppu_initialize2(jit2, part, cache_path, obj_name);
 					}
 
-					ppu_log.success("LLVM: Compiled module %s", obj_name);
+					if (compiled_ok)
+					{
+						ppu_log.success("LLVM: Compiled module %s", obj_name);
+					}
+					else if (cpu ? cpu->state.all_of(cpu_flag::exit) : Emu.IsStopped())
+					{
+						// Shutdown cancelled the translation - no object was written,
+						// the module recompiles on the next launch. (Previously this
+						// path logged a fake "Compiled module" success.)
+						ppu_log.notice("LLVM: Compile of module %s cancelled", obj_name);
+					}
+					else
+					{
+						// Codegen failed (e.g. LLVM OOM on a giant symbol-resolver
+						// part) - object absent, retried next boot with a cold RSS.
+						ppu_log.error("LLVM: Module %s failed to compile and was skipped", obj_name);
+					}
 				}
 
 				core_lock.unlock();
@@ -5898,7 +5917,7 @@ bool ppu_initialize(const ppu_module<lv2_obj>& info, bool check_only, u64 file_s
 	return ppu_initialize(info, check_only, file_size, memory_limit);
 }
 
-static void ppu_initialize2(jit_compiler& jit, const ppu_module<lv2_obj>& module_part, const std::string& cache_path, const std::string& obj_name)
+static bool ppu_initialize2(jit_compiler& jit, const ppu_module<lv2_obj>& module_part, const std::string& cache_path, const std::string& obj_name)
 {
 #ifdef LLVM_AVAILABLE
 	using namespace llvm;
@@ -5985,8 +6004,8 @@ static void ppu_initialize2(jit_compiler& jit, const ppu_module<lv2_obj>& module
 		{
 			if (Emu.IsStopped())
 			{
-				ppu_log.success("LLVM: Translation cancelled");
-				return;
+				ppu_log.notice("LLVM: Translation cancelled");
+				return false;
 			}
 
 			if (mod_func.size)
@@ -6010,7 +6029,7 @@ static void ppu_initialize2(jit_compiler& jit, const ppu_module<lv2_obj>& module
 				else
 				{
 					Emu.Pause();
-					return;
+					return false;
 				}
 			}
 		}
@@ -6026,7 +6045,7 @@ static void ppu_initialize2(jit_compiler& jit, const ppu_module<lv2_obj>& module
 			else
 			{
 				Emu.Pause();
-				return;
+				return false;
 			}
 		}
 
@@ -6056,13 +6075,23 @@ static void ppu_initialize2(jit_compiler& jit, const ppu_module<lv2_obj>& module
 				{
 					Emu.GracefulShutdown(false, true);
 				});
-			return;
+			return false;
 		}
 #endif
 		ppu_log.notice("LLVM: %zu functions generated (code_size=0x%x, num_func=%d, max_addr(-)min_addr=0x%x)", _module->getFunctionList().size(), guest_code_size, num_func, max_addr - min_addr);
 	}
 
-	// Load or compile module
-	jit.add(std::move(_module), cache_path);
+	// Load or compile module. Use the recoverable path (codegen runs on a
+	// disposable helper thread): LLVM OOM/fatal during a giant module (e.g.
+	// the ~478k-declaration symbol-resolver part of huge executables) then
+	// kills only that helper instead of abort()ing the whole process - the
+	// module is skipped, its object stays absent and is retried on the next
+	// boot, when no live game RSS competes for memory.
+	if (std::string error; !jit.try_add(std::move(_module), cache_path, error))
+	{
+		ppu_log.error("LLVM: Codegen failed for module %s: %s", obj_name, error);
+		return false;
+	}
 #endif // LLVM_AVAILABLE
+	return true;
 }

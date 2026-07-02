@@ -961,6 +961,8 @@ bool jit_compiler::try_add(std::unique_ptr<llvm::Module> _module, const std::str
 		m_engine->generateCodeForModule(ptr);
 	}, error))
 	{
+		// Do not leave the engine pointing at the (stack) cache object
+		m_engine->setObjectCache(nullptr);
 		return false;
 	}
 
