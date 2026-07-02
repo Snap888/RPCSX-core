@@ -60,6 +60,7 @@ compile_commands.json
 *.DS_Store
 
 build*/
+release-variants/
 .cache/
 rpcs3/git-version.h
 .rx.version
