@@ -75,6 +75,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <deque>
+#include <fcntl.h>
 #include <filesystem>
 #include <functional>
 #include <iterator>
@@ -84,6 +85,7 @@
 #include <string>
 #include <sys/resource.h>
 #include <thread>
+#include <unistd.h>
 #include <vector>
 
 #pragma GCC diagnostic push
@@ -1941,6 +1943,30 @@ extern "C" bool _rpcsx_initialize(std::string_view rootDir,
     // Limit log size to ~25% of free space
     log_file = logs::make_file_listener(fs::get_log_dir() + "RPCSX.log",
                                         stats.avail_free / 4);
+  }
+
+  // Capture native stderr (fd 2) into a side file. LLVM's unhandled-error
+  // paths write their last words to fd 2 before abort() (e.g. "LLVM ERROR:
+  // out of memory" from report_bad_alloc_error) - an Android app otherwise
+  // discards fd 2 entirely, which made the Demon's Souls compile-OOM death
+  // completely silent. Kept separate from RPCSX.log so raw writes cannot
+  // interleave with the buffered file listener. O_APPEND keeps each write
+  // atomic. Normally this file stays empty.
+  {
+    std::error_code ec;
+    std::filesystem::remove(fs::get_log_dir() + "RPCSX.stderr.old.log", ec);
+    std::filesystem::rename(fs::get_log_dir() + "RPCSX.stderr.log",
+                            fs::get_log_dir() + "RPCSX.stderr.old.log", ec);
+
+    if (const int fd =
+            ::open((fs::get_log_dir() + "RPCSX.stderr.log").c_str(),
+                   O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0644);
+        fd >= 0) {
+      ::dup2(fd, 2);
+      if (fd != 2) {
+        ::close(fd);
+      }
+    }
   }
 
   // Release logging budget: a handful of high-volume HLE / recompiler channels emit
