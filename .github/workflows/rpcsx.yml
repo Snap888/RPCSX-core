@@ -120,11 +120,11 @@ jobs:
       if: |
         github.event_name != 'pull_request' &&
         github.ref == 'refs/heads/master' &&
-        github.repository == 'RPCSX/rpcsx'
+        github.repository == 'Snap888/RPCSX-core'
       with:
         prerelease: false
         make_latest: true
-        repository: RPCSX/rpcsx-build
+        repository: Snap888/rpcsx-build
         token: ${{ secrets.BUILD_TOKEN }}
         tag_name: v${{ env.RX_VERSION }}-${{ env.RX_SHA }}
         files: librpcsx-android-${{ matrix.abi }}-${{ matrix.arch }}.so
