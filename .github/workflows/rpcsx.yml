@@ -26,9 +26,6 @@ jobs:
           libsox-dev g++-14 ninja-build libasound2-dev nasm libudev-dev \
           libxcb1-dev libx11-dev libwayland-dev libxkbcommon-dev libxrandr-dev \
           libxinerama-dev libxcursor-dev libxi-dev libxext-dev
-        cmake -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=g++-14 -DCMAKE_INSTALL_PREFIX=/usr
-        cmake --build build -j$(($(nproc) + 2))
-        sudo cmake --build build
 
     - name: Build RPCSX
       run: |
@@ -123,13 +120,12 @@ jobs:
       if: |
         github.event_name != 'pull_request' &&
         github.ref == 'refs/heads/master' &&
-        github.repository == 'RPCSX/rpcsx'
+        github.repository == 'Snap888/RPCSX-core'
       with:
         prerelease: false
         make_latest: true
-        repository: RPCSX/rpcsx-build
+        repository: Snap888/rpcsx-build
         token: ${{ secrets.BUILD_TOKEN }}
         tag_name: v${{ env.RX_VERSION }}-${{ env.RX_SHA }}
         files: librpcsx-android-${{ matrix.abi }}-${{ matrix.arch }}.so
         body: ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}
-
